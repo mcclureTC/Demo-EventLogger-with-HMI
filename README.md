@@ -1,6 +1,5 @@
 # Demo-EventLogger-with-HMI
-A TwinCAT demo for implementing the TwinCAT Event Logger, and using a C# HMI to read the events via an ADS connection.
-
+> **Note:** This project, including its documentation, was generated with Claude (Anthropic's AI assistant). It has been built and tested, but it is provided as is, without warranty. Use it at your own risk.
 
 # TwinCAT EventLogger Demo
 
