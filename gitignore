@@ -8,13 +8,12 @@
 # -----------------------------------------------------------------------------
 # Build output. These also contain the Beckhoff NuGet DLLs, which must not be
 # redistributed: every user restores them from nuget.org instead.
-[Bb]in/
-[Oo]bj/
-[Dd]ebug/
-[Rr]elease/
+bin/
+obj/
+debug/
+release/
 x64/
 x86/
-[Aa][Rr][Mm]64/
 publish/
 *.nupkg
 *.snupkg
