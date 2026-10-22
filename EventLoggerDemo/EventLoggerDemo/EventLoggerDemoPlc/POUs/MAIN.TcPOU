@@ -1,0 +1,12 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.12">
+  <POU Name="MAIN" Id="{95e5a0e8-cb77-4cfa-8792-3bcb5a7fec1a}" SpecialFunc="None">
+    <Declaration><![CDATA[PROGRAM MAIN
+VAR
+    Machine : DemoMachine;
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[Machine.CyclicLogic(Commands := GVL_Hmi.Commands, Status := GVL_Hmi.Status);]]></ST>
+    </Implementation>
+  </POU>
+</TcPlcObject>

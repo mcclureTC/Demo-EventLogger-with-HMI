@@ -1,0 +1,16 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.12">
+  <DUT Name="ST_HmiCommands" Id="{92dbb4f0-11a3-4366-87fb-d712a469d768}">
+    <Declaration><![CDATA[// Written by the HMI. The HMI writes the arguments first and Request last.
+// The PLC executes the request, increments Status.RequestCount and sets Request back to NotSet.
+TYPE ST_HmiCommands :
+STRUCT
+    Request               : E_HmiRequest;
+    IntegerArgument       : DINT;       // air pressure in mbar, drive error code, batch number
+    SecondIntegerArgument : DINT;       // part count
+    TextArgument          : STRING;     // operator name
+    OvenTemperature       : LREAL := 20.0; // simulated process value, written by the HMI slider
+END_STRUCT
+END_TYPE]]></Declaration>
+  </DUT>
+</TcPlcObject>

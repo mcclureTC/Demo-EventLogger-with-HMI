@@ -1,0 +1,77 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.12">
+  <POU Name="MessagePoint" Id="{e10d5fb8-a0cb-43a4-9457-6759bd02efa6}" SpecialFunc="None">
+    <Declaration><![CDATA[// One message in the TwinCAT EventLogger, with its own source name.
+// Call Create once before anything else. Fill arguments with NewArguments() before Send.
+FUNCTION_BLOCK MessagePoint
+VAR
+    _Message    : FB_TcMessage;
+    _Source     : FB_TcSourceInfo;
+    _IsCreated  : BOOL;
+    _LastResult : HRESULT;
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[]]></ST>
+    </Implementation>
+    <Method Name="Create" Id="{98a02cfc-29f1-4f14-82f3-4f4768526fe5}">
+      <Declaration><![CDATA[METHOD Create : BOOL
+// Creates the message instance in the EventLogger. Returns TRUE at once if already created.
+VAR_INPUT
+    Entry      : TcEventEntry;   // e.g. TC_EVENTS.EventLoggerDemo.MachineStarted
+    SourceName : STRING;         // shown as the message's source
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF _IsCreated THEN
+    Create := TRUE;
+    RETURN;
+END_IF
+
+_Source.Clear();
+_Source.sName := SourceName;
+
+_LastResult := _Message.CreateEx(stEventEntry := Entry, ipSourceInfo := _Source);
+_IsCreated := (_LastResult >= 0);
+Create := _IsCreated;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="NewArguments" Id="{be046dc2-fad4-4d1a-ae7d-0ff837fdd5d4}">
+      <Declaration><![CDATA[METHOD NewArguments : I_TcArguments
+// Empties the argument list and returns it for chaining: NewArguments().AddString(Name)]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[NewArguments := _Message.ipArguments.Clear();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="Send" Id="{8ddcdf5b-5085-4a3d-a73e-b47c4a5d174e}">
+      <Declaration><![CDATA[METHOD Send : BOOL]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF NOT _IsCreated THEN
+    Send := FALSE;
+    RETURN;
+END_IF
+
+_LastResult := _Message.Send(nTimeStamp := 0);
+Send := (_LastResult >= 0);]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="IsCreated" Id="{1434c020-87d2-4ec0-99d2-e6f3e576d087}">
+      <Declaration><![CDATA[PROPERTY IsCreated : BOOL]]></Declaration>
+      <Get Name="Get" Id="{8922183d-0b41-4fa1-bfec-1fbd040efd74}">
+        <Declaration><![CDATA[VAR
+END_VAR]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[IsCreated := _IsCreated;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="LastResult" Id="{6a1861b1-e63e-4ea6-8d43-0b64b52ba2db}">
+      <Declaration><![CDATA[PROPERTY LastResult : HRESULT]]></Declaration>
+      <Get Name="Get" Id="{c099cdb3-0738-4667-a99d-ed6395195176}">
+        <Declaration><![CDATA[VAR
+END_VAR]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[LastResult := _LastResult;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+  </POU>
+</TcPlcObject>

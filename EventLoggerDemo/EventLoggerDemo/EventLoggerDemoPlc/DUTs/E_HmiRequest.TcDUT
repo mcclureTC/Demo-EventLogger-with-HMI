@@ -1,0 +1,20 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.12">
+  <DUT Name="E_HmiRequest" Id="{da5e057e-d82a-4c9c-9532-4172387dd53c}">
+    <Declaration><![CDATA[// Requests the HMI can make. Values are part of the HMI contract: never renumber.
+{attribute 'qualified_only'}
+{attribute 'strict'}
+{attribute 'to_string'}
+TYPE E_HmiRequest :
+(
+    NotSet              := 0,
+    RaiseLowAirPressure := 1,
+    ClearLowAirPressure := 2,
+    RaiseDriveFault     := 3,
+    ClearDriveFault     := 4,
+    SendMachineStarted  := 5,
+    SendBatchCompleted  := 6
+) UINT;
+END_TYPE]]></Declaration>
+  </DUT>
+</TcPlcObject>

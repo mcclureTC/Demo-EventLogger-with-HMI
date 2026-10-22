@@ -1,0 +1,137 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.12">
+  <POU Name="DemoMachine" Id="{407b6627-0f23-43c5-bbe0-fb1ad95a819a}" SpecialFunc="None">
+    <Declaration><![CDATA[// The demo application. Supervises a simulated oven temperature and executes HMI requests,
+// reporting everything through the TwinCAT EventLogger.
+FUNCTION_BLOCK DemoMachine
+VAR
+    _OverTemperature : AlarmPoint;
+    _LowAirPressure  : AlarmPoint;
+    _DriveFault      : AlarmPoint;
+    _MachineStarted  : MessagePoint;
+    _BatchCompleted  : MessagePoint;
+    _IsInitialised   : BOOL;
+END_VAR
+VAR CONSTANT
+    OvenTemperatureLimit      : LREAL := 80.0;
+    OvenTemperatureHysteresis : LREAL := 5.0;
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[]]></ST>
+    </Implementation>
+    <Method Name="CyclicLogic" Id="{8c9bc7a9-e336-407e-b328-aee7ca261f2e}">
+      <Declaration><![CDATA[METHOD CyclicLogic
+VAR_IN_OUT
+    Commands : ST_HmiCommands;
+    Status   : ST_HmiStatus;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[Status.Heartbeat := Status.Heartbeat + 1;
+
+IF NOT _IsInitialised THEN
+    _IsInitialised := Initialise();
+END_IF
+Status.IsInitialised := _IsInitialised;
+
+IF NOT _IsInitialised THEN
+    RETURN;
+END_IF
+
+SuperviseOvenTemperature(Temperature := Commands.OvenTemperature);
+
+IF Commands.Request <> E_HmiRequest.NotSet THEN
+    Status.LastRequest         := Commands.Request;
+    Status.LastRequestAccepted := HandleRequest(Commands := Commands);
+    Status.RequestCount        := Status.RequestCount + 1;
+    Commands.Request           := E_HmiRequest.NotSet;
+END_IF
+
+Status.OvenTemperature       := Commands.OvenTemperature;
+Status.OvenTemperatureLimit  := OvenTemperatureLimit;
+Status.OverTemperatureRaised := _OverTemperature.IsRaised;
+Status.LowAirPressureRaised  := _LowAirPressure.IsRaised;
+Status.DriveFaultRaised      := _DriveFault.IsRaised;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="Initialise" Id="{00d4326e-f772-4996-8cd9-d81613237ea8}">
+      <Declaration><![CDATA[METHOD PRIVATE Initialise : BOOL
+// Creates every alarm and message. Safe to call again after a partial failure.
+VAR
+    AlarmsCreated   : BOOL;
+    MessagesCreated : BOOL;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[// AND does not short-circuit, so every Create is attempted on every call.
+AlarmsCreated := _OverTemperature.Create(Entry := TC_EVENTS.EventLoggerDemo.OverTemperature, WithConfirmation := TRUE, SourceName := 'Oven')
+             AND _LowAirPressure.Create(Entry := TC_EVENTS.EventLoggerDemo.LowAirPressure, WithConfirmation := FALSE, SourceName := 'Air supply')
+             AND _DriveFault.Create(Entry := TC_EVENTS.EventLoggerDemo.DriveFault, WithConfirmation := TRUE, SourceName := 'Conveyor drive');
+
+MessagesCreated := _MachineStarted.Create(Entry := TC_EVENTS.EventLoggerDemo.MachineStarted, SourceName := 'Operator panel')
+               AND _BatchCompleted.Create(Entry := TC_EVENTS.EventLoggerDemo.BatchCompleted, SourceName := 'Production');
+
+Initialise := AlarmsCreated AND MessagesCreated;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="SuperviseOvenTemperature" Id="{4d98a661-dbfa-473b-b4f6-ea3ff0b1a2de}">
+      <Declaration><![CDATA[METHOD PRIVATE SuperviseOvenTemperature
+// Raises OverTemperature above the limit and clears it below limit minus hysteresis.
+VAR_INPUT
+    Temperature : LREAL;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF NOT _OverTemperature.IsRaised THEN
+    IF Temperature > OvenTemperatureLimit THEN
+        _OverTemperature.NewArguments().AddDINT(LREAL_TO_DINT(Temperature)).AddDINT(LREAL_TO_DINT(OvenTemperatureLimit));
+        _OverTemperature.Raise();
+    END_IF
+ELSIF Temperature < OvenTemperatureLimit - OvenTemperatureHysteresis THEN
+    _OverTemperature.Clear(ResetConfirmation := FALSE);
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="HandleRequest" Id="{04e7562a-d90e-4248-ba0b-7cf568fae927}">
+      <Declaration><![CDATA[METHOD PRIVATE HandleRequest : BOOL
+// Executes one HMI request. Returns TRUE if the EventLogger accepted it.
+VAR_IN_OUT CONSTANT
+    Commands : ST_HmiCommands;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[CASE Commands.Request OF
+    E_HmiRequest.RaiseLowAirPressure:
+        IF _LowAirPressure.IsRaised THEN
+            HandleRequest := TRUE;
+        ELSE
+            _LowAirPressure.NewArguments().AddDINT(Commands.IntegerArgument);
+            HandleRequest := _LowAirPressure.Raise();
+        END_IF
+
+    E_HmiRequest.ClearLowAirPressure:
+        HandleRequest := _LowAirPressure.Clear(ResetConfirmation := FALSE);
+
+    E_HmiRequest.RaiseDriveFault:
+        IF _DriveFault.IsRaised THEN
+            HandleRequest := TRUE;
+        ELSE
+            _DriveFault.NewArguments().AddDINT(Commands.IntegerArgument);
+            HandleRequest := _DriveFault.Raise();
+        END_IF
+
+    E_HmiRequest.ClearDriveFault:
+        // Clearing does not confirm: the alarm stays in the list until the operator confirms it.
+        HandleRequest := _DriveFault.Clear(ResetConfirmation := FALSE);
+
+    E_HmiRequest.SendMachineStarted:
+        _MachineStarted.NewArguments().AddString(Commands.TextArgument);
+        HandleRequest := _MachineStarted.Send();
+
+    E_HmiRequest.SendBatchCompleted:
+        _BatchCompleted.NewArguments().AddDINT(Commands.IntegerArgument).AddDINT(Commands.SecondIntegerArgument);
+        HandleRequest := _BatchCompleted.Send();
+
+ELSE
+    HandleRequest := FALSE;
+END_CASE]]></ST>
+      </Implementation>
+    </Method>
+  </POU>
+</TcPlcObject>

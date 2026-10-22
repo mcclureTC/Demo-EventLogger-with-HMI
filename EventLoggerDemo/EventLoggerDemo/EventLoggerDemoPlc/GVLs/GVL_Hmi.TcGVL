@@ -1,0 +1,11 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.12">
+  <GVL Name="GVL_Hmi" Id="{e82abc26-f957-434c-aae6-9b6b3c24e0ed}">
+    <Declaration><![CDATA[// The HMI contract. The web HMI reads and writes these symbols by name over ADS.
+{attribute 'qualified_only'}
+VAR_GLOBAL
+    Commands : ST_HmiCommands;
+    Status   : ST_HmiStatus;
+END_VAR]]></Declaration>
+  </GVL>
+</TcPlcObject>

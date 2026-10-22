@@ -1,0 +1,59 @@
+<?xml version="1.0"?>
+<TcSmProject xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://www.beckhoff.com/schemas/2012/07/TcSmProject" TcSmVersion="1.0" TcVersion="3.1.4026.27">
+	<DataTypes>
+		<DataType>
+			<Name GUID="{45A0D9B4-5D85-44DD-A963-58A39B890363}" PersistentType="true">EventLoggerDemo</Name>
+			<DisplayName TxtId=""><![CDATA[Event Logger Demo]]></DisplayName>
+			<EventId>
+				<Name Id="1">OverTemperature</Name>
+				<DisplayName TxtId=""><![CDATA[Oven temperature {0} degC is above the limit of {1} degC]]></DisplayName>
+				<DescriptionText TxtId=""><![CDATA[Raised by the PLC while the oven temperature is above its limit. Needs confirmation.]]></DescriptionText>
+				<Severity>Error</Severity>
+				<Comment TxtId=""><![CDATA[Raised by the PLC while the oven temperature is above its limit. Needs confirmation.]]></Comment>
+			</EventId>
+			<EventId>
+				<Name Id="2">LowAirPressure</Name>
+				<DisplayName TxtId=""><![CDATA[Supply air pressure is low ({0} mbar)]]></DisplayName>
+				<DescriptionText TxtId=""><![CDATA[Raised and cleared from the HMI. No confirmation.]]></DescriptionText>
+				<Severity>Warning</Severity>
+				<Comment TxtId=""><![CDATA[Raised and cleared from the HMI. No confirmation.]]></Comment>
+			</EventId>
+			<EventId>
+				<Name Id="3">DriveFault</Name>
+				<DisplayName TxtId=""><![CDATA[Drive fault, error code {0}]]></DisplayName>
+				<DescriptionText TxtId=""><![CDATA[Raised and cleared from the HMI. Needs confirmation.]]></DescriptionText>
+				<Severity>Critical</Severity>
+				<Comment TxtId=""><![CDATA[Raised and cleared from the HMI. Needs confirmation.]]></Comment>
+			</EventId>
+			<EventId>
+				<Name Id="4">MachineStarted</Name>
+				<DisplayName TxtId=""><![CDATA[Machine started by operator {0}]]></DisplayName>
+				<DescriptionText TxtId=""><![CDATA[Message sent from the HMI.]]></DescriptionText>
+				<Severity>Info</Severity>
+				<Comment TxtId=""><![CDATA[Message sent from the HMI.]]></Comment>
+			</EventId>
+			<EventId>
+				<Name Id="5">BatchCompleted</Name>
+				<DisplayName TxtId=""><![CDATA[Batch {0} completed with {1} parts]]></DisplayName>
+				<DescriptionText TxtId=""><![CDATA[Message sent from the HMI.]]></DescriptionText>
+				<Severity>Info</Severity>
+				<Comment TxtId=""><![CDATA[Message sent from the HMI.]]></Comment>
+			</EventId>
+		</DataType>
+	</DataTypes>
+	<Project ProjectGUID="{A3887508-D7E6-464B-9B01-4E2815109296}" TargetNetId="192.168.8.100.1.1" Target64Bit="true" ShowHideConfigurations="#x6">
+		<System>
+			<Tasks>
+				<Task Id="3" Priority="20" CycleTime="100000" AmsPort="350" AdtTasks="true">
+					<Name>PlcTask</Name>
+				</Task>
+			</Tasks>
+			<TypeSystem>
+				<AdditionalTmcFile Name="EventLoggerDemo" File="..\..\..\..\Downloads\TcSkill\EventLoggerDemo\EventLoggerDemo\TwinCAT\EventLoggerDemo.tmc"/>
+			</TypeSystem>
+		</System>
+		<Plc>
+			<Project File="EventLoggerDemoPlc.xti"/>
+		</Plc>
+	</Project>
+</TcSmProject>

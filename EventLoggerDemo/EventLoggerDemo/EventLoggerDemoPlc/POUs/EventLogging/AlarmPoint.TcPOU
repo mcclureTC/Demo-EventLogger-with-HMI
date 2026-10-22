@@ -1,0 +1,104 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.12">
+  <POU Name="AlarmPoint" Id="{9afa0265-9bb2-4894-8f1c-92ffdb741dca}" SpecialFunc="None">
+    <Declaration><![CDATA[// One alarm in the TwinCAT EventLogger, with its own source name.
+// Call Create once before anything else. Fill arguments with NewArguments() before Raise.
+FUNCTION_BLOCK AlarmPoint
+VAR
+    _Alarm      : FB_TcAlarm;
+    _Source     : FB_TcSourceInfo;
+    _IsCreated  : BOOL;
+    _LastResult : HRESULT;
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[]]></ST>
+    </Implementation>
+    <Method Name="Create" Id="{c744b19b-793b-4942-88b3-66f0cd288709}">
+      <Declaration><![CDATA[METHOD Create : BOOL
+// Creates the alarm instance in the EventLogger. Returns TRUE at once if already created.
+VAR_INPUT
+    Entry            : TcEventEntry;   // e.g. TC_EVENTS.EventLoggerDemo.OverTemperature
+    WithConfirmation : BOOL;
+    SourceName       : STRING;         // shown as the alarm's source
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF _IsCreated THEN
+    Create := TRUE;
+    RETURN;
+END_IF
+
+_Source.Clear();
+_Source.sName := SourceName;
+
+_LastResult := _Alarm.CreateEx(stEventEntry := Entry, bWithConfirmation := WithConfirmation, ipSourceInfo := _Source);
+_IsCreated := (_LastResult >= 0);
+Create := _IsCreated;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="NewArguments" Id="{0444d2bd-4a06-4521-9680-d570ace6ebe0}">
+      <Declaration><![CDATA[METHOD NewArguments : I_TcArguments
+// Empties the argument list and returns it for chaining: NewArguments().AddDINT(42).AddDINT(7)
+// Arguments are captured when the alarm is raised.]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[NewArguments := _Alarm.ipArguments.Clear();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="Raise" Id="{8b418f39-9018-47c6-9a36-095cba9938bb}">
+      <Declaration><![CDATA[METHOD Raise : BOOL]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF NOT _IsCreated THEN
+    Raise := FALSE;
+    RETURN;
+END_IF
+
+_LastResult := _Alarm.Raise(nTimeStamp := 0);
+Raise := (_LastResult >= 0);]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="Clear" Id="{25ad90dc-73e7-4475-85e3-40f8197115f5}">
+      <Declaration><![CDATA[METHOD Clear : BOOL
+VAR_INPUT
+    ResetConfirmation : BOOL;   // TRUE: an unconfirmed alarm can no longer be confirmed
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF NOT _IsCreated THEN
+    Clear := FALSE;
+    RETURN;
+END_IF
+
+_LastResult := _Alarm.Clear(nTimeStamp := 0, bResetConfirmation := ResetConfirmation);
+Clear := (_LastResult >= 0);]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="IsCreated" Id="{52b3d0e5-ffe1-4855-9a67-f079838faacd}">
+      <Declaration><![CDATA[PROPERTY IsCreated : BOOL]]></Declaration>
+      <Get Name="Get" Id="{10458c9b-06eb-4439-8fa2-2067c5f06691}">
+        <Declaration><![CDATA[VAR
+END_VAR]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[IsCreated := _IsCreated;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="IsRaised" Id="{449c8997-f1b8-4e59-b780-c64e8962d8e0}">
+      <Declaration><![CDATA[PROPERTY IsRaised : BOOL]]></Declaration>
+      <Get Name="Get" Id="{2a61caf3-9a90-4c89-8aa5-68a863db2d43}">
+        <Declaration><![CDATA[VAR
+END_VAR]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[IsRaised := _IsCreated AND_THEN _Alarm.bRaised;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="LastResult" Id="{5d66af15-40df-468a-b2af-e325c9ff4abd}">
+      <Declaration><![CDATA[PROPERTY LastResult : HRESULT]]></Declaration>
+      <Get Name="Get" Id="{c77857d0-61b0-4e1a-828a-5e547c3be10c}">
+        <Declaration><![CDATA[VAR
+END_VAR]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[LastResult := _LastResult;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+  </POU>
+</TcPlcObject>
