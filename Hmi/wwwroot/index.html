@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Event Logger Demo</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-mark" aria-hidden="true"></span>
+      <div>
+        <h1>Event Logger Demo</h1>
+        <p class="subtitle">TwinCAT 3 EventLogger &middot; web HMI</p>
+      </div>
+    </div>
+    <div class="links">
+      <span class="link" id="plcLink"><span class="dot"></span><span class="label">PLC</span><span class="detail" id="plcDetail">connecting&hellip;</span></span>
+      <span class="link" id="loggerLink"><span class="dot"></span><span class="label">EventLogger</span><span class="detail" id="loggerDetail">connecting&hellip;</span></span>
+    </div>
+  </header>
+
+  <main class="layout">
+    <!-- Left: things that create events -->
+    <section class="column triggers" aria-label="Trigger events">
+      <h2 class="column-title">Trigger events</h2>
+
+      <article class="card" id="ovenCard">
+        <header class="card-head">
+          <div>
+            <h3>Oven</h3>
+            <p class="hint">The PLC raises <b>OverTemperature</b> above the limit and clears it 5&nbsp;&deg;C below. Needs confirmation.</p>
+          </div>
+          <span class="sev sev-error">Error</span>
+        </header>
+        <div class="temp">
+          <output id="tempValue" class="temp-value">20</output><span class="temp-unit">&deg;C</span>
+          <span class="temp-limit">limit <span id="tempLimit">80</span>&nbsp;&deg;C</span>
+        </div>
+        <div class="slider-wrap">
+          <input type="range" id="tempSlider" min="0" max="120" step="1" value="20" aria-label="Simulated oven temperature">
+          <div class="slider-limit" id="sliderLimit" aria-hidden="true"></div>
+        </div>
+        <div class="state-line" id="ovenState"></div>
+      </article>
+
+      <article class="card">
+        <header class="card-head">
+          <div>
+            <h3>Air supply</h3>
+            <p class="hint">Raise and clear <b>LowAirPressure</b>. No confirmation, so it leaves the list as soon as it clears.</p>
+          </div>
+          <span class="sev sev-warning">Warning</span>
+        </header>
+        <div class="row">
+          <label class="field">Pressure <span class="unit">mbar</span>
+            <input type="number" id="pressure" value="4200" min="0" max="10000" step="100">
+          </label>
+          <button class="btn btn-raise" data-request="RaiseLowAirPressure" data-int="pressure">Raise</button>
+          <button class="btn" data-request="ClearLowAirPressure">Clear</button>
+        </div>
+        <div class="state-line" id="airState"></div>
+      </article>
+
+      <article class="card">
+        <header class="card-head">
+          <div>
+            <h3>Conveyor drive</h3>
+            <p class="hint">Raise and clear <b>DriveFault</b>. A cleared but unconfirmed fault stays in the list until you confirm it.</p>
+          </div>
+          <span class="sev sev-critical">Critical</span>
+        </header>
+        <div class="row">
+          <label class="field">Error code
+            <input type="number" id="driveCode" value="17" min="0" max="65535" step="1">
+          </label>
+          <button class="btn btn-raise" data-request="RaiseDriveFault" data-int="driveCode">Raise</button>
+          <button class="btn" data-request="ClearDriveFault">Clear</button>
+        </div>
+        <div class="state-line" id="driveState"></div>
+      </article>
+
+      <article class="card">
+        <header class="card-head">
+          <div>
+            <h3>Messages</h3>
+            <p class="hint">Messages have no state: they go straight to the history.</p>
+          </div>
+          <span class="sev sev-info">Info</span>
+        </header>
+        <div class="row">
+          <label class="field grow">Operator
+            <input type="text" id="operator" value="J. Smith" maxlength="80">
+          </label>
+          <button class="btn" data-request="SendMachineStarted" data-text="operator">Machine started</button>
+        </div>
+        <div class="row">
+          <label class="field">Batch
+            <input type="number" id="batch" value="1001" min="0" step="1">
+          </label>
+          <label class="field">Parts
+            <input type="number" id="parts" value="250" min="0" step="1">
+          </label>
+          <button class="btn" data-request="SendBatchCompleted" data-int="batch" data-int2="parts">Batch completed</button>
+        </div>
+      </article>
+    </section>
+
+    <!-- Right: what the EventLogger reports -->
+    <section class="column" aria-label="EventLogger">
+      <div class="panel">
+        <header class="panel-head">
+          <h2>Active alarms <span class="count" id="alarmCount">0</span></h2>
+          <button class="btn btn-small" id="confirmAll">Confirm all</button>
+        </header>
+        <div class="table-wrap">
+          <table class="grid" id="alarmTable">
+            <thead>
+              <tr><th>Severity</th><th>Raised</th><th>Source</th><th>Text</th><th>State</th><th></th></tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+          <p class="empty" id="alarmEmpty">No active alarms.</p>
+        </div>
+      </div>
+
+      <div class="panel">
+        <header class="panel-head">
+          <h2>Event history</h2>
+          <span class="muted">newest first, from the EventLogger's cache</span>
+        </header>
+        <div class="table-wrap">
+          <table class="grid" id="eventTable">
+            <thead>
+              <tr><th>Time</th><th>Type</th><th>Severity</th><th>Source</th><th>Text</th><th>Cleared</th><th>Confirmed</th></tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+          <p class="empty" id="eventEmpty">Nothing logged yet.</p>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  <script src="app.js"></script>
+</body>
+</html>
