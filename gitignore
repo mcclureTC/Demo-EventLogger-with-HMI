@@ -1,0 +1,86 @@
+# =============================================================================
+# TwinCAT EventLogger Demo
+# Keeps build output, user settings and Beckhoff binaries out of the repository.
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# .NET / Visual Studio (Hmi/)
+# -----------------------------------------------------------------------------
+# Build output. These also contain the Beckhoff NuGet DLLs, which must not be
+# redistributed: every user restores them from nuget.org instead.
+[Bb]in/
+[Oo]bj/
+[Dd]ebug/
+[Rr]elease/
+x64/
+x86/
+[Aa][Rr][Mm]64/
+publish/
+*.nupkg
+*.snupkg
+packages/
+
+# User-specific settings and IDE state
+.vs/
+.vscode/
+.idea/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+*.rsuser
+
+# Local overrides that may hold machine-specific AMS Net IDs or routes
+appsettings.Development.json
+appsettings.*.local.json
+
+# -----------------------------------------------------------------------------
+# TwinCAT 3 (TwinCAT/ and any XAE solution created around it)
+# -----------------------------------------------------------------------------
+# Build and download output
+_Boot/
+_CompileInfo/
+_Deployment/
+*.compileinfo
+*.bootinfo
+LineIDs.dbg
+LineIDs.dbg.bak
+
+# Beckhoff libraries: referenced by placeholder, never committed
+_Libraries/
+*.library
+*.compiled-library
+
+# Archives that bundle compiled libraries
+*.tpzip
+*.tnzip
+*.tszip
+
+# Generated module description of the PLC project (rebuilt on every build).
+# The event class file TwinCAT/EventLoggerDemo.tmc is source and IS committed.
+TwinCAT/EventLoggerDemoPlc/EventLoggerDemoPlc.tmc
+*.tmcRefac
+
+# XAE temporary, backup and per-user files
+*.~u
+*.tsproj.bak
+*.tsproj.orig
+*.plcproj.bak
+*.plcproj.orig
+*.TcPOU.bak
+*.project.~u
+*.tpy
+
+# Licence files: machine-bound trial or run-time licences
+*.tclrs
+
+# -----------------------------------------------------------------------------
+# Operating system and editor clutter
+# -----------------------------------------------------------------------------
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+.DS_Store
+*.swp
+*~
