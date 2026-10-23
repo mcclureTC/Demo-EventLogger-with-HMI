@@ -26,6 +26,15 @@ with their arguments and in the configured language, which is the point of using
 | `TwinCAT/EventLoggerDemo.tmc` | The event class `EventLoggerDemo` (5 events). Goes into the Type System. |
 | `TwinCAT/EventLoggerDemoPlc/` | The PLC project. Its own notes are in `Documentation/EventLoggerDemoPlc.md`. |
 | `Hmi/` | The web HMI: ASP.NET Core minimal API plus `wwwroot` (HTML, CSS, JS, no external downloads). |
+| `Broker/` | Mosquitto configuration for the MQTT demo. |
+| `Tools/CertTool/` | Creates the certificates for the broker and its clients. |
+| `MQTT.md` | MQTT setup guide, topics and payloads. |
+
+## MQTT
+
+The PLC can also publish its active alarms to an MQTT broker, and the HMI shows what the broker
+received in a Broker view. The demo uses Mosquitto on the same PC, set up to work the same way as
+AWS IoT Core. Setup, topics and payloads are in [MQTT.md](MQTT.md).
 
 ## Requirements
 
@@ -131,6 +140,7 @@ The page polls the server once a second.
 | GET | `/api/events` | the last 50 logged events |
 | POST | `/api/alarms/confirm` | the `key` object of an alarm from `/api/alarms` |
 | POST | `/api/alarms/confirm-all` | - |
+| GET | `/api/broker` | what the MQTT broker holds: connection, PLC online state, mode, alarms, recent messages |
 
 The HMI server listens on `localhost` only and has no authentication. It is a demo: do not expose it
 on a plant network as it is.

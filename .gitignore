@@ -6,8 +6,7 @@
 # -----------------------------------------------------------------------------
 # .NET / Visual Studio (Hmi/)
 # -----------------------------------------------------------------------------
-# Build output. These also contain the Beckhoff NuGet DLLs, which must not be
-# redistributed: every user restores them from nuget.org instead.
+# Build output; NuGet packages are restored on build
 [Bb]in/
 [Oo]bj/
 [Dd]ebug/
@@ -56,12 +55,12 @@ _Libraries/
 *.tnzip
 *.tszip
 
-# Generated module description of the PLC project (rebuilt on every build).
-# The event class file TwinCAT/EventLoggerDemo.tmc is source and IS committed.
-TwinCAT/EventLoggerDemoPlc/EventLoggerDemoPlc.tmc
-*.tmcRefac
+# Generated module descriptions; the event class file is source
+*.tmc
+!EventLoggerDemo.tmc
 
 # XAE temporary, backup and per-user files
+*.tmcRefac
 *.~u
 *.tsproj.bak
 *.tsproj.orig
@@ -73,6 +72,19 @@ TwinCAT/EventLoggerDemoPlc/EventLoggerDemoPlc.tmc
 
 # Licence files: machine-bound trial or run-time licences
 *.tclrs
+
+# -----------------------------------------------------------------------------
+# MQTT demo
+# -----------------------------------------------------------------------------
+# Certificates and private keys made by Tools/CertTool; regenerate them per PC
+Broker/certs/
+# Mosquitto's persistence file (retained messages)
+Broker/data/
+# Private keys and certificate files anywhere
+*.key
+*.pem
+*.pem.key
+*.pem.crt
 
 # -----------------------------------------------------------------------------
 # Operating system and editor clutter
