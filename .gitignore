@@ -6,8 +6,7 @@
 # -----------------------------------------------------------------------------
 # .NET / Visual Studio (Hmi/)
 # -----------------------------------------------------------------------------
-# Build output. These also contain the Beckhoff NuGet DLLs, which must not be
-# redistributed: every user restores them from nuget.org instead.
+# Build output; NuGet packages are restored on build
 [Bb]in/
 [Oo]bj/
 [Dd]ebug/
