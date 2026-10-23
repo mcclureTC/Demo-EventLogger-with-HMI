@@ -49,7 +49,7 @@
 				</Task>
 			</Tasks>
 			<TypeSystem>
-				<AdditionalTmcFile Name="EventLoggerDemo" File="..\..\..\..\Downloads\TcSkill\EventLoggerDemo\EventLoggerDemo\TwinCAT\EventLoggerDemo.tmc"/>
+				<AdditionalTmcFile Name="EventLoggerDemo" File="tmc\EventLoggerDemo.tmc"/>
 			</TypeSystem>
 		</System>
 		<Plc>
