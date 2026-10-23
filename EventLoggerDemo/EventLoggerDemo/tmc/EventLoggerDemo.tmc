@@ -1,0 +1,44 @@
+<?xml version="1.0"?>
+<TcModuleClass xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://www.beckhoff.com/schemas/2009/05/TcModuleClass">
+	<DataTypes>
+		<DataType>
+			<Name GUID="{45A0D9B4-5D85-44DD-A963-58A39B890363}" PersistentType="true">EventLoggerDemo</Name>
+			<DisplayName TxtId=""><![CDATA[Event Logger Demo]]></DisplayName>
+			<EventId>
+				<Name Id="1">OverTemperature</Name>
+				<DisplayName TxtId=""><![CDATA[Oven temperature {0} degC is above the limit of {1} degC]]></DisplayName>
+				<Comment TxtId=""><![CDATA[Raised by the PLC while the oven temperature is above its limit. Needs confirmation.]]></Comment>
+				<DescriptionText TxtId=""><![CDATA[Raised by the PLC while the oven temperature is above its limit. Needs confirmation.]]></DescriptionText>
+				<Severity>Error</Severity>
+			</EventId>
+			<EventId>
+				<Name Id="2">LowAirPressure</Name>
+				<DisplayName TxtId=""><![CDATA[Supply air pressure is low ({0} mbar)]]></DisplayName>
+				<Comment TxtId=""><![CDATA[Raised and cleared from the HMI. No confirmation.]]></Comment>
+				<DescriptionText TxtId=""><![CDATA[Raised and cleared from the HMI. No confirmation.]]></DescriptionText>
+				<Severity>Warning</Severity>
+			</EventId>
+			<EventId>
+				<Name Id="3">DriveFault</Name>
+				<DisplayName TxtId=""><![CDATA[Drive fault, error code {0}]]></DisplayName>
+				<Comment TxtId=""><![CDATA[Raised and cleared from the HMI. Needs confirmation.]]></Comment>
+				<DescriptionText TxtId=""><![CDATA[Raised and cleared from the HMI. Needs confirmation.]]></DescriptionText>
+				<Severity>Critical</Severity>
+			</EventId>
+			<EventId>
+				<Name Id="4">MachineStarted</Name>
+				<DisplayName TxtId=""><![CDATA[Machine started by operator {0}]]></DisplayName>
+				<Comment TxtId=""><![CDATA[Message sent from the HMI.]]></Comment>
+				<DescriptionText TxtId=""><![CDATA[Message sent from the HMI.]]></DescriptionText>
+				<Severity>Info</Severity>
+			</EventId>
+			<EventId>
+				<Name Id="5">BatchCompleted</Name>
+				<DisplayName TxtId=""><![CDATA[Batch {0} completed with {1} parts]]></DisplayName>
+				<Comment TxtId=""><![CDATA[Message sent from the HMI.]]></Comment>
+				<DescriptionText TxtId=""><![CDATA[Message sent from the HMI.]]></DescriptionText>
+				<Severity>Info</Severity>
+			</EventId>
+		</DataType>
+	</DataTypes>
+</TcModuleClass>
