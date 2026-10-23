@@ -3,10 +3,12 @@
   <POU Name="MAIN" Id="{95e5a0e8-cb77-4cfa-8792-3bcb5a7fec1a}" SpecialFunc="None">
     <Declaration><![CDATA[PROGRAM MAIN
 VAR
-    Machine : DemoMachine;
+    Machine  : DemoMachine;
+    Listener : AlarmListener;
 END_VAR]]></Declaration>
     <Implementation>
-      <ST><![CDATA[Machine.CyclicLogic(Commands := GVL_Hmi.Commands, Status := GVL_Hmi.Status);]]></ST>
+      <ST><![CDATA[Machine.CyclicLogic(Commands := GVL_Hmi.Commands, Status := GVL_Hmi.Status);
+Listener.CyclicLogic(Table := GVL_Hmi.PlcAlarms);]]></ST>
     </Implementation>
   </POU>
 </TcPlcObject>

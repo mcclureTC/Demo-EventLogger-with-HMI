@@ -26,10 +26,22 @@
     <Compile Include="DUTs\ST_HmiStatus.TcDUT">
       <SubType>Code</SubType>
     </Compile>
+    <Compile Include="DUTs\ST_PlcAlarm.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="DUTs\ST_PlcAlarmTable.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="GVLs\GVL_EventLogging.TcGVL">
+      <SubType>Code</SubType>
+    </Compile>
     <Compile Include="GVLs\GVL_Hmi.TcGVL">
       <SubType>Code</SubType>
     </Compile>
     <Compile Include="POUs\Demo\DemoMachine.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\EventLogging\AlarmListener.TcPOU">
       <SubType>Code</SubType>
     </Compile>
     <Compile Include="POUs\EventLogging\AlarmPoint.TcPOU">
@@ -38,10 +50,10 @@
     <Compile Include="POUs\EventLogging\MessagePoint.TcPOU">
       <SubType>Code</SubType>
     </Compile>
-    <Compile Include="POUs\MAIN.TcPOU">
+    <Compile Include="PlcTask.TcTTO">
       <SubType>Code</SubType>
     </Compile>
-    <Compile Include="PlcTask.TcTTO">
+    <Compile Include="POUs\MAIN.TcPOU">
       <SubType>Code</SubType>
     </Compile>
   </ItemGroup>
@@ -84,8 +96,8 @@
   <ProjectExtensions>
     <PlcProjectOptions>
       <XmlArchive>
-  <Data>
-    <o xml:space="preserve" t="OptionKey">
+        <Data>
+          <o xml:space="preserve" t="OptionKey">
       <v n="Name">"&lt;ProjectRoot&gt;"</v>
       <d n="SubKeys" t="Hashtable" ckt="String" cvt="OptionKey">
         <v>{29BD8D0C-3586-4548-BB48-497B9A01693F}</v>
@@ -131,14 +143,14 @@
       </d>
       <d n="Values" t="Hashtable" />
     </o>
-  </Data>
-  <TypeList>
-    <Type n="Boolean">System.Boolean</Type>
-    <Type n="Hashtable">System.Collections.Hashtable</Type>
-    <Type n="OptionKey">{54dd0eac-a6d8-46f2-8c27-2f43c7e49861}</Type>
-    <Type n="String">System.String</Type>
-  </TypeList>
-</XmlArchive>
+        </Data>
+        <TypeList>
+          <Type n="Boolean">System.Boolean</Type>
+          <Type n="Hashtable">System.Collections.Hashtable</Type>
+          <Type n="OptionKey">{54dd0eac-a6d8-46f2-8c27-2f43c7e49861}</Type>
+          <Type n="String">System.String</Type>
+        </TypeList>
+      </XmlArchive>
     </PlcProjectOptions>
   </ProjectExtensions>
 </Project>

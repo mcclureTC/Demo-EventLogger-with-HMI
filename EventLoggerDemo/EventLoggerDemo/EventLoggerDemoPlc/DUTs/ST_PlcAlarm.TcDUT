@@ -1,0 +1,16 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.12">
+  <DUT Name="ST_PlcAlarm" Id="{b0194b47-c64a-46e5-8aec-ba76f9db3d29}">
+    <Declaration><![CDATA[// One raised alarm, as reported to the PLC by the EventLogger.
+TYPE ST_PlcAlarm :
+STRUCT
+    Entry         : TcEventEntry;   // event class GUID, event ID, severity
+    SourceName    : STRING(80);
+    TimeRaised    : ULINT;          // 100 ns since 1601-01-01 UTC (FILETIME)
+    IsConfirmed   : BOOL;
+    TextAvailable : BOOL;           // TRUE once the text has arrived, a few cycles after the raise
+    Text          : T_MaxString;
+END_STRUCT
+END_TYPE]]></Declaration>
+  </DUT>
+</TcPlcObject>

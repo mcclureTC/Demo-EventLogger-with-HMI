@@ -1,0 +1,332 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4026.21">
+  <POU Name="AlarmListener" Id="{b5de06a8-a852-40cf-b9b1-c43c5a35d765}" SpecialFunc="None">
+    <Declaration><![CDATA[// Keeps a table of the alarms currently raised on this TwinCAT system, by listening to the
+// EventLogger. Call CyclicLogic every cycle; the table it is given is updated during the call.
+FUNCTION_BLOCK AlarmListener EXTENDS FB_ListenerBase2
+VAR
+    _Table           : REFERENCE TO ST_PlcAlarmTable;
+    _IsSubscribed    : BOOL;
+    _SubscribeResult : HRESULT;
+    _ExecuteResult   : HRESULT;
+    _RetryCountdown  : UDINT;
+
+    // Alarm texts arrive asynchronously, a few cycles after the alarm is raised. One request
+    // slot per possible row; a slot is matched back to its row by event and source, because
+    // rows move when others are removed.
+    _TextRequests : ARRAY[0..GVL_EventLogging.MaxPlcAlarms - 1] OF FB_RequestEventText;
+    _TextPending  : ARRAY[0..GVL_EventLogging.MaxPlcAlarms - 1] OF BOOL;
+    _TextDiscard  : ARRAY[0..GVL_EventLogging.MaxPlcAlarms - 1] OF BOOL;
+    _TextEntry    : ARRAY[0..GVL_EventLogging.MaxPlcAlarms - 1] OF TcEventEntry;
+    _TextSource   : ARRAY[0..GVL_EventLogging.MaxPlcAlarms - 1] OF STRING(80);
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[]]></ST>
+    </Implementation>
+    <Method Name="CollectTexts" Id="{858d7c4d-8938-4307-a887-bcac6b9e864f}">
+      <Declaration><![CDATA[METHOD PRIVATE CollectTexts
+// Copies each finished text into its alarm's row. A row removed in the meantime is skipped.
+VAR
+    Slot : DINT;
+    Row  : DINT;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[FOR Slot := 0 TO UDINT_TO_DINT(GVL_EventLogging.MaxPlcAlarms) - 1 DO
+    IF NOT _TextPending[Slot] OR_ELSE _TextRequests[Slot].bBusy THEN
+        CONTINUE;
+    END_IF
+
+    _TextPending[Slot] := FALSE;
+    IF _TextDiscard[Slot] OR_ELSE _TextRequests[Slot].bError THEN
+        CONTINUE;
+    END_IF
+
+    Row := FindAlarm(Entry := _TextEntry[Slot], SourceName := _TextSource[Slot]);
+    IF Row >= 0 THEN
+        _TextRequests[Slot].GetString(sResult := _Table.Alarms[Row].Text, nResult := SIZEOF(_Table.Alarms[Row].Text));
+        _Table.Alarms[Row].TextAvailable := TRUE;
+    END_IF
+END_FOR]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="CyclicLogic" Id="{6aba7b6f-d1de-4d54-8ffa-456c3cbf4dc1}">
+      <Declaration><![CDATA[METHOD CyclicLogic
+// Subscribes on first use, then processes the EventLogger's queue. Callbacks run inside Execute,
+// so Table is valid whenever they write to it.
+VAR_IN_OUT
+    Table : ST_PlcAlarmTable;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[_Table REF= Table;
+
+IF NOT _IsSubscribed THEN
+    IF _RetryCountdown > 0 THEN
+        _RetryCountdown := _RetryCountdown - 1;
+    ELSE
+        _SubscribeResult := THIS^.Subscribe(ipMessageFilterConfig := 0, ipAlarmFilterConfig := 0);
+        _IsSubscribed := (_SubscribeResult >= 0);
+        _RetryCountdown := GVL_EventLogging.SubscribeRetryCycles;
+    END_IF
+END_IF
+
+Table.IsSubscribed := _IsSubscribed;
+
+IF _IsSubscribed THEN
+    _ExecuteResult := THIS^.Execute();
+END_IF
+
+CollectTexts();]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="ExecuteResult" Id="{0f627d3d-443b-4c9c-be95-d8a568f6b154}">
+      <Declaration><![CDATA[PROPERTY ExecuteResult : HRESULT]]></Declaration>
+      <Get Name="Get" Id="{010fbbb9-a003-4b3b-9524-0984ec614540}">
+        <Declaration><![CDATA[VAR
+END_VAR]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[ExecuteResult := _ExecuteResult;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Method Name="FindAlarm" Id="{f35b3969-1fb8-4427-b291-1cf63fff3ca8}">
+      <Declaration><![CDATA[METHOD PRIVATE FindAlarm : DINT
+// Returns the row of the alarm with this event class, event ID and source, or -1.
+VAR_INPUT
+    Entry      : TcEventEntry;
+    SourceName : STRING(80);
+END_VAR
+VAR
+    Row : DINT;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[FindAlarm := -1;
+FOR Row := 0 TO UDINT_TO_DINT(_Table.Count) - 1 DO
+    IF IsSameAlarm(EntryA := _Table.Alarms[Row].Entry, SourceA := _Table.Alarms[Row].SourceName, EntryB := Entry, SourceB := SourceName) THEN
+        FindAlarm := Row;
+        RETURN;
+    END_IF
+END_FOR]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="IsSameAlarm" Id="{2b27aae5-e782-4d22-ba82-4fcc955a60ac}">
+      <Declaration><![CDATA[METHOD PRIVATE IsSameAlarm : BOOL
+// The EventLogger tells alarms apart by event class, event ID and source.
+VAR_INPUT
+    EntryA  : TcEventEntry;
+    SourceA : STRING(80);
+    EntryB  : TcEventEntry;
+    SourceB : STRING(80);
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IsSameAlarm := MEMCMP(ADR(EntryA.uuidEventClass), ADR(EntryB.uuidEventClass), SIZEOF(GUID)) = 0
+               AND_THEN EntryA.nEventId = EntryB.nEventId
+               AND_THEN SourceA = SourceB;]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="IsSubscribed" Id="{0426ac9c-0709-4ec4-a16c-ad7af8250dd9}">
+      <Declaration><![CDATA[PROPERTY IsSubscribed : BOOL]]></Declaration>
+      <Get Name="Get" Id="{a58c446c-5766-4b2b-9b85-d159b5e72ad7}">
+        <Declaration><![CDATA[VAR
+END_VAR]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[IsSubscribed := _IsSubscribed;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Method Name="OnAlarmCleared" Id="{28a350f2-1b01-4cbc-92cd-03edadd4c286}">
+      <Declaration><![CDATA[METHOD OnAlarmCleared : HRESULT
+VAR_INPUT
+    fbEvent : REFERENCE TO FB_TcEvent;
+END_VAR
+VAR
+    Entry      : TcEventEntry;
+    SourceName : STRING(80);
+    Index      : DINT;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[// The table lists raised alarms only, so a cleared alarm leaves it, confirmed or not.
+OnAlarmCleared := 0;
+IF NOT __ISVALIDREF(_Table) THEN
+    RETURN;
+END_IF
+
+Entry := fbEvent.stEventEntry;
+SourceName := SourceNameOf(fbEvent := fbEvent);
+Index := FindAlarm(Entry := Entry, SourceName := SourceName);
+IF Index >= 0 THEN
+    RemoveAt(Index := Index);
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="OnAlarmConfirmed" Id="{f3b6471b-0720-46ff-befc-2c5512cd40f2}">
+      <Declaration><![CDATA[METHOD OnAlarmConfirmed : HRESULT
+VAR_INPUT
+    fbEvent : REFERENCE TO FB_TcEvent;
+END_VAR
+VAR
+    Entry      : TcEventEntry;
+    SourceName : STRING(80);
+    Index      : DINT;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[OnAlarmConfirmed := 0;
+IF NOT __ISVALIDREF(_Table) THEN
+    RETURN;
+END_IF
+
+Entry := fbEvent.stEventEntry;
+SourceName := SourceNameOf(fbEvent := fbEvent);
+Index := FindAlarm(Entry := Entry, SourceName := SourceName);
+IF Index >= 0 THEN
+    _Table.Alarms[Index].IsConfirmed := TRUE;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="OnAlarmDisposed" Id="{cb3623a1-f4ca-4cd3-91d4-64e3c5b5b6f3}">
+      <Declaration><![CDATA[METHOD OnAlarmDisposed : HRESULT
+VAR_INPUT
+    fbEvent : REFERENCE TO FB_TcEvent;
+END_VAR
+VAR
+    Entry      : TcEventEntry;
+    SourceName : STRING(80);
+    Index      : DINT;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[// The alarm instance was released, for example because its PLC stopped.
+OnAlarmDisposed := 0;
+IF NOT __ISVALIDREF(_Table) THEN
+    RETURN;
+END_IF
+
+Entry := fbEvent.stEventEntry;
+SourceName := SourceNameOf(fbEvent := fbEvent);
+Index := FindAlarm(Entry := Entry, SourceName := SourceName);
+IF Index >= 0 THEN
+    RemoveAt(Index := Index);
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="OnAlarmRaised" Id="{f5dd471c-51c4-4262-936d-a979d60ea749}">
+      <Declaration><![CDATA[METHOD OnAlarmRaised : HRESULT
+VAR_INPUT
+    fbEvent : REFERENCE TO FB_TcEvent;
+END_VAR
+VAR
+    Entry      : TcEventEntry;
+    SourceName : STRING(80);
+    Index      : DINT;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[OnAlarmRaised := 0;
+IF NOT __ISVALIDREF(_Table) THEN
+    RETURN;
+END_IF
+
+Entry := fbEvent.stEventEntry;
+SourceName := SourceNameOf(fbEvent := fbEvent);
+
+Index := FindAlarm(Entry := Entry, SourceName := SourceName);
+IF Index < 0 THEN
+    IF _Table.Count >= GVL_EventLogging.MaxPlcAlarms THEN
+        _Table.Overflow := TRUE;
+        RETURN;
+    END_IF
+    Index := UDINT_TO_DINT(_Table.Count);
+    _Table.Count := _Table.Count + 1;
+END_IF
+
+_Table.Alarms[Index].Entry       := Entry;
+_Table.Alarms[Index].SourceName  := SourceName;
+_Table.Alarms[Index].TimeRaised  := fbEvent.nTimestamp;
+_Table.Alarms[Index].IsConfirmed := FALSE;
+_Table.Alarms[Index].TextAvailable := FALSE;
+_Table.Alarms[Index].Text := '';
+StartTextRequest(fbEvent := fbEvent, Entry := Entry, SourceName := SourceName);]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="RemoveAt" Id="{8091c888-78e3-4531-a107-eb88277e36b8}">
+      <Declaration><![CDATA[METHOD PRIVATE RemoveAt
+// Removes one row and closes the gap, keeping the remaining rows in order.
+VAR_INPUT
+    Index : DINT;
+END_VAR
+VAR
+    Row   : DINT;
+    Empty : ST_PlcAlarm;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF Index < 0 OR_ELSE Index >= UDINT_TO_DINT(_Table.Count) THEN
+    RETURN;
+END_IF
+
+FOR Row := Index TO UDINT_TO_DINT(_Table.Count) - 2 DO
+    _Table.Alarms[Row] := _Table.Alarms[Row + 1];
+END_FOR
+
+_Table.Count := _Table.Count - 1;
+_Table.Alarms[_Table.Count] := Empty;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="SourceNameOf" Id="{b82cdae5-8202-4af9-ab21-1652ce231fc7}">
+      <Declaration><![CDATA[METHOD PRIVATE SourceNameOf : STRING(80)
+VAR_INPUT
+    fbEvent : REFERENCE TO FB_TcEvent;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF fbEvent.ipSourceInfo <> 0 THEN
+    SourceNameOf := fbEvent.ipSourceInfo.sName;
+ELSE
+    SourceNameOf := '';
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="StartTextRequest" Id="{bb8a3471-b02c-4ab8-ad2c-d4f572344176}">
+      <Declaration><![CDATA[METHOD PRIVATE StartTextRequest
+// Starts the asynchronous text request for a raised alarm. Called inside the callback, while
+// fbEvent and its arguments are valid; CollectTexts picks the text up when it arrives.
+VAR_INPUT
+    fbEvent    : REFERENCE TO FB_TcEvent;
+    Entry      : TcEventEntry;
+    SourceName : STRING(80);
+END_VAR
+VAR
+    Slot     : DINT;
+    FreeSlot : DINT;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[FreeSlot := -1;
+FOR Slot := 0 TO UDINT_TO_DINT(GVL_EventLogging.MaxPlcAlarms) - 1 DO
+    IF _TextPending[Slot] THEN
+        // A request still running for the same alarm belongs to an earlier raise.
+        IF IsSameAlarm(EntryA := _TextEntry[Slot], SourceA := _TextSource[Slot], EntryB := Entry, SourceB := SourceName) THEN
+            _TextDiscard[Slot] := TRUE;
+        END_IF
+    ELSIF FreeSlot < 0 THEN
+        FreeSlot := Slot;
+    END_IF
+END_FOR
+
+IF FreeSlot < 0 THEN
+    RETURN; // every slot busy: this row keeps TextAvailable FALSE
+END_IF
+
+_TextEntry[FreeSlot]   := Entry;
+_TextSource[FreeSlot]  := SourceName;
+_TextDiscard[FreeSlot] := FALSE;
+_TextPending[FreeSlot] := TRUE;
+_TextRequests[FreeSlot].Request(eventClass := Entry.uuidEventClass, nEventId := Entry.nEventId, nLangId := GVL_EventLogging.TextLanguageId, ipArgs := fbEvent.ipArguments);]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="SubscribeResult" Id="{b9fd8e24-bf6d-4e9e-a4f6-b1303a958ce9}">
+      <Declaration><![CDATA[PROPERTY SubscribeResult : HRESULT]]></Declaration>
+      <Get Name="Get" Id="{0504d2e5-5762-4fd6-9e73-04d11453f675}">
+        <Declaration><![CDATA[VAR
+END_VAR]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[SubscribeResult := _SubscribeResult;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+  </POU>
+</TcPlcObject>

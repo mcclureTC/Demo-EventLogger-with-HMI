@@ -6,6 +6,7 @@
 VAR_GLOBAL
     Commands : ST_HmiCommands;
     Status   : ST_HmiStatus;
+    PlcAlarms : ST_PlcAlarmTable;   // kept by AlarmListener from the EventLogger
 END_VAR]]></Declaration>
   </GVL>
 </TcPlcObject>

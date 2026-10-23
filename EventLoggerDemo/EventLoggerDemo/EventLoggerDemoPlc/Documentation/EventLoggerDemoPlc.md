@@ -25,7 +25,36 @@ from it when the PLC project is built.
 | `MessagePoint` | One `FB_TcMessage` with its own `FB_TcSourceInfo`. Create, NewArguments, Send. |
 | `DemoMachine` | The demo application: oven temperature supervision and HMI request handling. |
 | `GVL_Hmi` | The HMI contract: `Commands` (written by the HMI) and `Status` (read by the HMI). |
-| `MAIN` | Calls `DemoMachine.CyclicLogic` with the HMI contract. |
+| `AlarmListener` | Extends `FB_ListenerBase2`: keeps a table of the alarms raised on this system. |
+| `GVL_EventLogging` | Size of that table, its text language, subscription retry interval. |
+| `MAIN` | Calls `DemoMachine.CyclicLogic` with the HMI contract, then `AlarmListener.CyclicLogic`. |
+
+## AlarmListener: reading the EventLogger in the PLC
+
+Tc3_EventLogger has no block that returns the EventLogger's list of active alarms. A listener is
+the PLC's way to follow it: `AlarmListener` extends `FB_ListenerBase2`, subscribes once, calls
+`Execute` every cycle, and keeps `GVL_Hmi.PlcAlarms` up to date from the callbacks.
+
+| Callback | Effect on the table |
+|---|---|
+| `OnAlarmRaised` | Adds a row: event entry, source name, time raised, text |
+| `OnAlarmConfirmed` | Sets `IsConfirmed` on the row |
+| `OnAlarmCleared` | Removes the row |
+| `OnAlarmDisposed` | Removes the row (the alarm instance was released) |
+
+- The table holds **raised** alarms only. A cleared alarm still waiting for confirmation leaves the
+  table, although the EventLogger keeps it in its active list. The web HMI shows that full list.
+- It sees every alarm on the TwinCAT system, from any PLC or module, not only this project's.
+- It only learns of alarms raised after it subscribed.
+- Each callback receives `REFERENCE TO FB_TcEvent`, which must not be copied, so the table stores
+  the event's details rather than the event.
+- Texts arrive a few cycles after the raise. `OnAlarmRaised` starts an `FB_RequestEventText`
+  request with the event's class, ID and arguments (while the event is still valid); every cycle
+  `CollectTexts` copies finished texts into their rows and sets `TextAvailable`. Asking
+  `fbEvent.RequestEventText` once in the callback is not enough: the first request for an event
+  only starts, so the text appeared from the second raise onwards.
+- `GVL_EventLogging.MaxPlcAlarms` (32) sets the table size. `Overflow` turns TRUE when a raised
+  alarm did not fit.
 
 ## HMI contract
 

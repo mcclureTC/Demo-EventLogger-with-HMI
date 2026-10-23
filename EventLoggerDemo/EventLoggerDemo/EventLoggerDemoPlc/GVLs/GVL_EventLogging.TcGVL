@@ -1,0 +1,12 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.12">
+  <GVL Name="GVL_EventLogging" Id="{e3d7a4c4-2992-4903-a1c0-9a0343ef8c72}">
+    <Declaration><![CDATA[// Settings of the PLC-side alarm table.
+{attribute 'qualified_only'}
+VAR_GLOBAL CONSTANT
+    MaxPlcAlarms         : UDINT := 32;     // rows in ST_PlcAlarmTable
+    TextLanguageId       : DINT  := 1033;   // language of PLC-side texts, as a Windows LCID
+    SubscribeRetryCycles : UDINT := 100;    // cycles between subscription attempts
+END_VAR]]></Declaration>
+  </GVL>
+</TcPlcObject>
