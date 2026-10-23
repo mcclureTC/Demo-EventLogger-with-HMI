@@ -6,6 +6,9 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.Configure<PlcOptions>(builder.Configuration.GetSection("Plc"));
 builder.Services.AddSingleton<PlcGateway>();
 builder.Services.AddSingleton<EventLoggerGateway>();
+builder.Services.Configure<BrokerOptions>(builder.Configuration.GetSection("Broker"));
+builder.Services.AddSingleton<BrokerClient>();
+builder.Services.AddHostedService(sp => sp.GetRequiredService<BrokerClient>());
 builder.Services.ConfigureHttpJsonOptions(o =>
     o.SerializerOptions.Converters.Add(new JsonStringEnumConverter()));
 
@@ -35,6 +38,9 @@ api.MapPost("/alarms/confirm-all", (EventLoggerGateway logger) =>
         logger.ConfirmAll();
         return new RequestResult(true, "All alarms confirmed.");
     }));
+
+// MQTT broker (what the PLC published)
+api.MapGet("/broker", (BrokerClient broker) => broker.GetView());
 
 var url = (builder.Configuration["Urls"] ?? "http://localhost:5000").Split(';')[0];
 

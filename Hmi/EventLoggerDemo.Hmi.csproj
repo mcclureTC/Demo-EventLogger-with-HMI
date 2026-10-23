@@ -13,6 +13,8 @@
     <PackageReference Include="Beckhoff.TwinCAT.Ads" Version="6.1.*" />
     <!-- EventLogger client: active alarms, logged events, confirmation, localised texts. -->
     <PackageReference Include="Beckhoff.TwinCAT.TcEventLoggerAdsProxy.Net" Version="2.9.4" />
+    <!-- MQTT client for the Broker view (MIT licence). -->
+    <PackageReference Include="MQTTnet" Version="4.3.7.1207" />
   </ItemGroup>
 
 </Project>

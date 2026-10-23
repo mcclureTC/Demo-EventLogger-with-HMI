@@ -192,6 +192,70 @@ function renderEvents(events) {
   $("eventEmpty").hidden = events.length > 0;
 }
 
+// ---------------------------------------------------------------- broker view
+let brokerSignature = "";
+let messagesSignature = "";
+
+function setChip(id, ok, value, warn = false) {
+  const chip = $(id);
+  if (ok !== null) {
+    chip.classList.toggle("ok", ok);
+    chip.classList.toggle("bad", !ok);
+  }
+  chip.classList.toggle("warn", warn);
+  chip.querySelector(".chip-value").textContent = value;
+}
+
+function renderBroker(b) {
+  if (!b.enabled) {
+    setChip("chipBroker", false, "disabled in appsettings.json");
+  } else if (b.connected) {
+    setChip("chipBroker", true, b.broker);
+  } else {
+    setChip("chipBroker", false, b.error ? "not connected: " + b.error : "not connected");
+  }
+  $("brokerWhere").textContent = "dt/eventloggerdemo/" + b.thing;
+
+  setChip("chipDevice", b.deviceState === "online", b.deviceState);
+  setChip("chipMode", null, b.mode || "–");
+  const age = b.heartbeatAgeSeconds;
+  // A heartbeat is expected every 30 s; flag it once two have been missed.
+  setChip("chipHeartbeat", null, age == null ? "none yet" : Math.round(age) + " s ago", age != null && age > 65);
+  setChip("chipSequence", null, b.lastSequence == null ? "–" : String(b.lastSequence));
+
+  const signature = JSON.stringify(b.alarms);
+  if (signature !== brokerSignature) {
+    brokerSignature = signature;
+    const body = $("brokerTable").tBodies[0];
+    body.replaceChildren();
+    for (const a of b.alarms) {
+      const row = body.insertRow();
+      cell(row, sevChip(a.severity));
+      cell(row, dateTime(a.raised), "time");
+      cell(row, a.source, "source");
+      cell(row, a.textAvailable ? a.text : "(text not yet available)", "text");
+      cell(row, a.confirmed ? "Yes" : "No");
+    }
+    $("brokerCount").textContent = b.alarms.length;
+    $("brokerEmpty").hidden = b.alarms.length > 0;
+  }
+
+  const messages = JSON.stringify(b.recentMessages);
+  if (messages !== messagesSignature) {
+    messagesSignature = messages;
+    const body = $("brokerMessages").tBodies[0];
+    body.replaceChildren();
+    for (const m of b.recentMessages) {
+      const row = body.insertRow();
+      cell(row, time(m.receivedUtc), "time");
+      cell(row, m.topic.replace("dt/eventloggerdemo/" + b.thing + "/", ".../"), "topic");
+      cell(row, String(m.bytes));
+      cell(row, m.retained ? "yes" : "no");
+      cell(row, m.summary);
+    }
+  }
+}
+
 // ---------------------------------------------------------------- polling
 let refreshing = false;
 
@@ -199,11 +263,15 @@ async function refresh() {
   if (refreshing) return;
   refreshing = true;
   try {
-    const [status, alarms, events] = await Promise.allSettled([
+    const [status, alarms, events, broker] = await Promise.allSettled([
       api("GET", "/api/status"),
       api("GET", "/api/alarms"),
       api("GET", "/api/events"),
+      api("GET", "/api/broker"),
     ]);
+
+    if (broker.status === "fulfilled") renderBroker(broker.value);
+    else setChip("chipBroker", false, "HMI server down");
 
     if (status.status === "fulfilled") renderStatus(status.value);
     else setLink("plcLink", false, "HMI server down");
