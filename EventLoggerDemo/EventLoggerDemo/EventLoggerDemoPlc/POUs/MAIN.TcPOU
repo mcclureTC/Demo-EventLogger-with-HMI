@@ -1,14 +1,18 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
-<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.12">
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4026.21">
   <POU Name="MAIN" Id="{95e5a0e8-cb77-4cfa-8792-3bcb5a7fec1a}" SpecialFunc="None">
     <Declaration><![CDATA[PROGRAM MAIN
 VAR
-    Machine  : DemoMachine;
-    Listener : AlarmListener;
+    Machine   : DemoMachine;
+    Listener  : AlarmListener;
+    Publisher : MqttPublisher;
 END_VAR]]></Declaration>
     <Implementation>
       <ST><![CDATA[Machine.CyclicLogic(Commands := GVL_Hmi.Commands, Status := GVL_Hmi.Status);
-Listener.CyclicLogic(Table := GVL_Hmi.PlcAlarms);]]></ST>
+Listener.CyclicLogic(Table := GVL_Hmi.PlcAlarms);
+Publisher.CyclicLogic(Table := GVL_Hmi.PlcAlarms, Status := GVL_Mqtt.Status);
+
+]]></ST>
     </Implementation>
   </POU>
 </TcPlcObject>

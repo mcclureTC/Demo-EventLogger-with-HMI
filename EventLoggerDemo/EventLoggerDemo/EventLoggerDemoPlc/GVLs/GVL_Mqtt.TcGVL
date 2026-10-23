@@ -1,0 +1,19 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4026.21">
+  <GVL Name="GVL_Mqtt" Id="{9ad50e01-6d83-4786-ad65-f0676b6f981b}">
+    <Declaration><![CDATA[// MQTT publishing of GVL_Hmi.PlcAlarms. Broker connection settings are in GVL_MqttSite.
+{attribute 'qualified_only'}
+VAR_GLOBAL
+    Enable            : BOOL := TRUE;                                  // FALSE: publish offline, then disconnect
+    PublishMode       : E_MqttPublishMode := E_MqttPublishMode.PerAlarm;  // read at PLC start only
+    HeartbeatInterval : TIME := T#30S;
+    TextWaitTime      : TIME := T#1S;                                  // how long a change waits for alarm texts
+    Status            : ST_MqttStatus;
+END_VAR
+VAR_GLOBAL CONSTANT
+    TopicRoot        : STRING(31) := 'dt/eventloggerdemo';
+    MaxPayloadLength : UDINT := 24000;     // the full 32-row table is about 20 000 bytes at most
+    KeepAliveSeconds : UINT := 60;
+END_VAR]]></Declaration>
+  </GVL>
+</TcPlcObject>

@@ -1,0 +1,16 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.12">
+  <DUT Name="E_MqttPublishMode" Id="{db61863b-8044-452a-a2db-a549083657e3}">
+    <Declaration><![CDATA[// How the alarm table is published. Read at PLC start only.
+{attribute 'qualified_only'}
+{attribute 'strict'}
+{attribute 'to_string'}
+TYPE E_MqttPublishMode :
+(
+    NotSet   := 0,
+    Table    := 1,   // one retained document with every alarm, on .../alarms
+    PerAlarm := 2    // one retained message per alarm on .../alarms/<key>, plus .../alarms/index
+) UINT;
+END_TYPE]]></Declaration>
+  </DUT>
+</TcPlcObject>

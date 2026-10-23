@@ -27,7 +27,12 @@ from it when the PLC project is built.
 | `GVL_Hmi` | The HMI contract: `Commands` (written by the HMI) and `Status` (read by the HMI). |
 | `AlarmListener` | Extends `FB_ListenerBase2`: keeps a table of the alarms raised on this system. |
 | `GVL_EventLogging` | Size of that table, its text language, subscription retry interval. |
-| `MAIN` | Calls `DemoMachine.CyclicLogic` with the HMI contract, then `AlarmListener.CyclicLogic`. |
+| `MqttPublisher` | Publishes `GVL_Hmi.PlcAlarms` to an MQTT broker with TF6701 (see `MQTT.md` in the repository). |
+| `AlarmJsonWriter` | Builds the JSON payloads with `FB_JsonSaxWriter`. |
+| `F_AlarmKey`, `F_FileTimeToIso` | An alarm's MQTT key; a FILETIME as ISO 8601 UTC. |
+| `GVL_Mqtt` | Publish mode, heartbeat, text wait, enable, and the publisher's status. |
+| `GVL_MqttSite` | This PC's broker connection: host, port, TLS, Thing Name, certificate files. |
+| `MAIN` | Calls `DemoMachine`, then `AlarmListener`, then `MqttPublisher`. |
 
 ## AlarmListener: reading the EventLogger in the PLC
 
@@ -55,6 +60,21 @@ the PLC's way to follow it: `AlarmListener` extends `FB_ListenerBase2`, subscrib
   only starts, so the text appeared from the second raise onwards.
 - `GVL_EventLogging.MaxPlcAlarms` (32) sets the table size. `Overflow` turns TRUE when a raised
   alarm did not fit.
+- `ChangeCount` rises when an alarm is added, confirmed or removed, and `TextCount` when a text
+  arrives. `MqttPublisher` watches both to know when to publish.
+
+## MqttPublisher
+
+Publishes the alarm table using only what AWS IoT Core supports: MQTT 3.1.1, QoS 1, TLS with a client
+certificate, topics under `dt/eventloggerdemo/<thing>/`. The full description, topics and payloads are
+in `MQTT.md` at the repository root.
+
+- Settings in `GVL_MqttSite` and `GVL_Mqtt.PublishMode` are read once, at PLC start.
+- On every (re)connect: `status` online, the other mode's retained topic emptied, the full table.
+- A change waits up to `GVL_Mqtt.TextWaitTime` for alarm texts. A publication takes a copy of the
+  table and sends one message per cycle, so per-alarm mode needs a few cycles.
+- The Last Will is set to QoS 1 explicitly: TF6701's default for it is QoS 2, which AWS refuses.
+- `GVL_Mqtt.Status` shows the connection state, error code, sequence and counters.
 
 ## HMI contract
 
@@ -92,8 +112,12 @@ Confirming alarms is done by the HMI through the EventLogger itself, not through
 | Tc3_EventLogger | * (latest) | FB_TcAlarm, FB_TcMessage, FB_TcSourceInfo, I_TcArguments, TcEventEntry |
 | Tc3_Module | * (latest) | Dependency of Tc3_EventLogger |
 | Tc2_System | * (latest) | HRESULT and system types |
-| Tc2_Standard | * (latest) | Standard IEC blocks |
+| Tc2_Standard | * (latest) | Standard IEC blocks, CONCAT, MID, REPLACE |
+| Tc2_Utilities | * (latest) | GUID_TO_STRING, F_ToLCase, FILETIME_TO_SYSTEMTIME, SYSTEMTIME_TO_STRING |
+| Tc3_IotBase | * (latest) | FB_IotMqttClient (TF6701) |
+| Tc3_JsonXml | * (latest) | FB_JsonSaxWriter |
 
-Developed against TwinCAT 3.1 build 4024 (Tc3_EventLogger 3.1.27 or later). The EventLogger and ADS
+Developed against TwinCAT 3.1 build 4024 (Tc3_EventLogger 3.1.27 or later) and run on build 4026. The EventLogger and ADS
 are part of the standard TwinCAT 3 runtime; confirm against your licence set if the target has a
-restricted one.
+restricted one. MQTT publishing needs a **TF6701** licence on the target (a 7-day trial is enough
+for the demo).

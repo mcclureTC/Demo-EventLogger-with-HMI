@@ -1,0 +1,18 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.12">
+  <DUT Name="E_MqttPublishStep" Id="{fb3a809c-dcf3-441a-8389-235d73a25918}">
+    <Declaration><![CDATA[// Steps of one publication of the alarm table; one message is sent per PLC cycle.
+{attribute 'qualified_only'}
+{attribute 'strict'}
+{attribute 'to_string'}
+TYPE E_MqttPublishStep :
+(
+    Idle        := 0,
+    Table       := 1,   // Table mode: the whole document
+    Alarms      := 2,   // PerAlarm mode: one alarm per cycle
+    DeleteStale := 3,   // PerAlarm mode: empty retained message for each alarm no longer present
+    Index       := 4    // PerAlarm mode: the list of current keys
+) UINT;
+END_TYPE]]></Declaration>
+  </DUT>
+</TcPlcObject>

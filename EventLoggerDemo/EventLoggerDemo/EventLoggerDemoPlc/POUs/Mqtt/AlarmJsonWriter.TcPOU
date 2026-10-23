@@ -1,0 +1,261 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4026.21">
+  <POU Name="AlarmJsonWriter" Id="{c6761686-aefa-4076-9bbb-f5abb667b88e}" SpecialFunc="None">
+    <Declaration><![CDATA[// Builds the JSON payloads the PLC publishes. Each Write method leaves one complete document in
+// the payload buffer and returns FALSE if it did not fit.
+FUNCTION_BLOCK AlarmJsonWriter
+VAR
+    _Writer  : FB_JsonSaxWriter;
+    _Payload : STRING(GVL_Mqtt.MaxPayloadLength);
+    _Length  : UDINT;
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[]]></ST>
+    </Implementation>
+    <Method Name="AddAlarmMembers" Id="{d95fde15-4afb-4431-b998-e8d895482dc7}">
+      <Declaration><![CDATA[METHOD PRIVATE AddAlarmMembers
+// Every field of one alarm. raisedFileTime is a string: the value is too large for a JavaScript number.
+VAR_IN_OUT CONSTANT
+    Alarm : ST_PlcAlarm;
+END_VAR
+VAR
+    Key            : STRING(127);
+    EventClass     : STRING(80);
+    Raised         : STRING(30);
+    RaisedFileTime : STRING(24);
+    Severity       : STRING(15);
+    SeverityLevel  : DINT;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[Key := F_AlarmKey(Alarm := Alarm);
+EventClass := F_ToLCase(GUID_TO_STRING(Alarm.Entry.uuidEventClass));
+Raised := F_FileTimeToIso(FileTime := Alarm.TimeRaised);
+RaisedFileTime := ULINT_TO_STRING(Alarm.TimeRaised);
+
+CASE Alarm.Entry.eSeverity OF
+    TcEventSeverity.Verbose:
+        Severity := 'Verbose';
+        SeverityLevel := 0;
+    TcEventSeverity.Info:
+        Severity := 'Info';
+        SeverityLevel := 1;
+    TcEventSeverity.Warning:
+        Severity := 'Warning';
+        SeverityLevel := 2;
+    TcEventSeverity.Error:
+        Severity := 'Error';
+        SeverityLevel := 3;
+    TcEventSeverity.Critical:
+        Severity := 'Critical';
+        SeverityLevel := 4;
+ELSE
+    Severity := 'Unknown';
+    SeverityLevel := -1;
+END_CASE
+
+_Writer.AddKey('key');
+_Writer.AddString(Key);
+_Writer.AddKey('eventClass');
+_Writer.AddString(EventClass);
+_Writer.AddKey('eventId');
+_Writer.AddUdint(Alarm.Entry.nEventId);
+_Writer.AddKey('severity');
+_Writer.AddString(Severity);
+_Writer.AddKey('severityLevel');
+_Writer.AddDint(SeverityLevel);
+_Writer.AddKey('source');
+_Writer.AddString(Alarm.SourceName);
+_Writer.AddKey('raised');
+_Writer.AddString(Raised);
+_Writer.AddKey('raisedFileTime');
+_Writer.AddString(RaisedFileTime);
+_Writer.AddKey('confirmed');
+_Writer.AddBool(Alarm.IsConfirmed);
+_Writer.AddKey('textAvailable');
+_Writer.AddBool(Alarm.TextAvailable);
+_Writer.AddKey('text');
+_Writer.AddString(Alarm.Text);]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="AddEnvelope" Id="{8dfd5cf2-556f-437d-8e67-334d1a11a321}">
+      <Declaration><![CDATA[METHOD PRIVATE AddEnvelope
+VAR_IN_OUT CONSTANT
+    Envelope : ST_MqttEnvelope;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[_Writer.AddKey('thing');
+_Writer.AddString(Envelope.Thing);
+_Writer.AddKey('session');
+_Writer.AddString(Envelope.Session);
+_Writer.AddKey('sequence');
+_Writer.AddUdint(Envelope.Sequence);
+_Writer.AddKey('timestamp');
+_Writer.AddString(Envelope.Timestamp);
+_Writer.AddKey('mode');
+_Writer.AddString(Envelope.Mode);
+IF LEN(Envelope.Reason) > 0 THEN
+    _Writer.AddKey('reason');
+    _Writer.AddString(Envelope.Reason);
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="Finish" Id="{b26ab69e-c499-4af9-a431-c719e84058d1}">
+      <Declaration><![CDATA[METHOD PRIVATE Finish : BOOL
+// Copies the document into the payload buffer, without the terminating null byte.
+VAR
+    Copied : UDINT;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[Copied := _Writer.CopyDocument(pDoc := _Payload, nDoc := SIZEOF(_Payload));
+_Writer.ResetDocument();
+IF Copied > 1 THEN
+    _Length := Copied - 1;
+    Finish := TRUE;
+ELSE
+    _Length := 0;
+    Finish := FALSE; // did not fit
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="PayloadAddress" Id="{91dedbe3-8f93-41d3-86ff-1654fea6e548}">
+      <Declaration><![CDATA[PROPERTY PayloadAddress : PVOID]]></Declaration>
+      <Get Name="Get" Id="{7bc3cfc2-8f3c-45a0-847b-2a68ff22c93e}">
+        <Declaration><![CDATA[VAR
+END_VAR]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[PayloadAddress := ADR(_Payload);]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="PayloadLength" Id="{c205bf7c-25e9-4182-a4f6-59897cae7979}">
+      <Declaration><![CDATA[PROPERTY PayloadLength : UDINT]]></Declaration>
+      <Get Name="Get" Id="{8299018e-e0b9-4fa3-bb10-499c5a670930}">
+        <Declaration><![CDATA[VAR
+END_VAR]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[PayloadLength := _Length;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Method Name="WriteAlarm" Id="{24f2973d-9511-44a7-aac6-08851f63ce68}">
+      <Declaration><![CDATA[METHOD WriteAlarm : BOOL
+// .../alarms/<key> in PerAlarm mode: one alarm.
+VAR_IN_OUT CONSTANT
+    Envelope : ST_MqttEnvelope;
+    Alarm    : ST_PlcAlarm;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[_Writer.ResetDocument();
+_Writer.StartObject();
+AddEnvelope(Envelope := Envelope);
+AddAlarmMembers(Alarm := Alarm);
+_Writer.EndObject();
+WriteAlarm := Finish();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="WriteHeartbeat" Id="{77303ce0-bfd7-4a4a-b76a-727c34eecfe1}">
+      <Declaration><![CDATA[METHOD WriteHeartbeat : BOOL
+// .../heartbeat: the publisher is alive; how many alarms are raised.
+VAR_IN_OUT CONSTANT
+    Envelope : ST_MqttEnvelope;
+END_VAR
+VAR_INPUT
+    Count    : UDINT;
+    Overflow : BOOL;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[_Writer.ResetDocument();
+_Writer.StartObject();
+AddEnvelope(Envelope := Envelope);
+_Writer.AddKey('count');
+_Writer.AddUdint(Count);
+_Writer.AddKey('overflow');
+_Writer.AddBool(Overflow);
+_Writer.EndObject();
+WriteHeartbeat := Finish();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="WriteIndex" Id="{bb548c19-596c-4888-b98a-1fce8742d058}">
+      <Declaration><![CDATA[METHOD WriteIndex : BOOL
+// .../alarms/index in PerAlarm mode: the keys of the current alarms.
+VAR_IN_OUT CONSTANT
+    Envelope : ST_MqttEnvelope;
+    Keys     : ARRAY[0..GVL_EventLogging.MaxPlcAlarms - 1] OF STRING(127);
+END_VAR
+VAR_INPUT
+    Count : UDINT;
+END_VAR
+VAR
+    Row : DINT;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[_Writer.ResetDocument();
+_Writer.StartObject();
+AddEnvelope(Envelope := Envelope);
+_Writer.AddKey('count');
+_Writer.AddUdint(Count);
+_Writer.AddKey('keys');
+_Writer.StartArray();
+FOR Row := 0 TO UDINT_TO_DINT(Count) - 1 DO
+    _Writer.AddString(Keys[Row]);
+END_FOR
+_Writer.EndArray();
+_Writer.EndObject();
+WriteIndex := Finish();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="WriteStatus" Id="{95088f30-3cd8-4af8-bb9f-9f540f030bd2}">
+      <Declaration><![CDATA[METHOD WriteStatus : BOOL
+// .../status: online or offline.
+VAR_IN_OUT CONSTANT
+    Envelope : ST_MqttEnvelope;
+END_VAR
+VAR_INPUT
+    Online : BOOL;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[_Writer.ResetDocument();
+_Writer.StartObject();
+AddEnvelope(Envelope := Envelope);
+_Writer.AddKey('state');
+IF Online THEN
+    _Writer.AddString('online');
+ELSE
+    _Writer.AddString('offline');
+END_IF
+_Writer.EndObject();
+WriteStatus := Finish();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="WriteTable" Id="{1dd3e349-5558-4c01-88da-d45840249b0d}">
+      <Declaration><![CDATA[METHOD WriteTable : BOOL
+// .../alarms in Table mode: every alarm in one document.
+VAR_IN_OUT CONSTANT
+    Envelope : ST_MqttEnvelope;
+    Table    : ST_PlcAlarmTable;
+END_VAR
+VAR
+    Row : DINT;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[_Writer.ResetDocument();
+_Writer.StartObject();
+AddEnvelope(Envelope := Envelope);
+_Writer.AddKey('count');
+_Writer.AddUdint(Table.Count);
+_Writer.AddKey('overflow');
+_Writer.AddBool(Table.Overflow);
+_Writer.AddKey('alarms');
+_Writer.StartArray();
+FOR Row := 0 TO UDINT_TO_DINT(Table.Count) - 1 DO
+    _Writer.StartObject();
+    AddAlarmMembers(Alarm := Table.Alarms[Row]);
+    _Writer.EndObject();
+END_FOR
+_Writer.EndArray();
+_Writer.EndObject();
+WriteTable := Finish();]]></ST>
+      </Implementation>
+    </Method>
+  </POU>
+</TcPlcObject>

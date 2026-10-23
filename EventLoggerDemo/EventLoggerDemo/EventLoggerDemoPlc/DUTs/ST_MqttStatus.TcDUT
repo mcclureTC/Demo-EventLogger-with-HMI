@@ -1,0 +1,21 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.12">
+  <DUT Name="ST_MqttStatus" Id="{648d4689-e840-4913-a198-a3d6c363c158}">
+    <Declaration><![CDATA[// State of the MQTT publisher, for the online view.
+TYPE ST_MqttStatus :
+STRUCT
+    Connected         : BOOL;
+    ConnectionState   : ETcIotMqttClientState;
+    HasError          : BOOL;
+    ErrorCode         : HRESULT;
+    Mode              : E_MqttPublishMode;    // the mode in use (read at PLC start)
+    ModeChangePending : BOOL;                 // GVL_Mqtt.PublishMode differs: takes effect after a restart
+    Session           : STRING(30);
+    Sequence          : UDINT;
+    MessagesPublished : UDINT;
+    PublishFailures   : UDINT;
+    Busy              : BOOL;                 // a publication of the table is in progress
+END_STRUCT
+END_TYPE]]></Declaration>
+  </DUT>
+</TcPlcObject>

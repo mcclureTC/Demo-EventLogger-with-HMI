@@ -41,8 +41,11 @@
 			</EventId>
 		</DataType>
 	</DataTypes>
-	<Project ProjectGUID="{A3887508-D7E6-464B-9B01-4E2815109296}" TargetNetId="192.168.8.100.1.1" Target64Bit="true" ShowHideConfigurations="#x6">
+	<Project ProjectGUID="{A3887508-D7E6-464B-9B01-4E2815109296}" Target64Bit="true" ShowHideConfigurations="#x6">
 		<System>
+			<Settings MaxCpus="8" NonWinCpus="2" DontCheckTarget="192.168.8.0.1.1">
+				<Cpu CpuId="7"/>
+			</Settings>
 			<Tasks>
 				<Task Id="3" Priority="20" CycleTime="100000" AmsPort="350" AdtTasks="true">
 					<Name>PlcTask</Name>

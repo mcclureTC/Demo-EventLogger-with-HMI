@@ -1,0 +1,53 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.12">
+  <POU Name="F_AlarmKey" Id="{232e102c-8faa-4661-bae9-f8b1a6a9f0d3}" SpecialFunc="None">
+    <Declaration><![CDATA[// The alarm's MQTT key: event class GUID (32 hex digits), event ID and source, joined by dashes,
+// lowercase letters, digits and dashes only, e.g. 3f2a9c1e5b7d4e8a9c217d4e5f6a8b90-2-air-supply.
+// The EventLogger tells alarms apart by these three, so the key is unique per alarm.
+FUNCTION F_AlarmKey : STRING(127)
+VAR_IN_OUT CONSTANT
+    Alarm : ST_PlcAlarm;
+END_VAR
+VAR
+    GuidText    : STRING(40);
+    Hex         : STRING(40);
+    Source      : STRING(80);
+    Slug        : STRING(80);
+    SlugLength  : INT;
+    Position    : INT;
+    Character   : BYTE;
+    LastWasDash : BOOL;
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[// 8-4-4-4-12 without the dashes
+GuidText := F_ToLCase(GUID_TO_STRING(Alarm.Entry.uuidEventClass));
+Hex := CONCAT(CONCAT(CONCAT(CONCAT(MID(GuidText, 8, 1), MID(GuidText, 4, 10)), MID(GuidText, 4, 15)), MID(GuidText, 4, 20)), MID(GuidText, 12, 25));
+
+// Source name: letters and digits kept, every other run of characters becomes one dash
+Source := F_ToLCase(Alarm.SourceName);
+SlugLength := 0;
+LastWasDash := TRUE; // no leading dash
+FOR Position := 0 TO LEN(Source) - 1 DO
+    Character := Source[Position];
+    IF (Character >= 16#61 AND Character <= 16#7A) OR (Character >= 16#30 AND Character <= 16#39) THEN
+        Slug[SlugLength] := Character;
+        SlugLength := SlugLength + 1;
+        LastWasDash := FALSE;
+    ELSIF NOT LastWasDash THEN
+        Slug[SlugLength] := 16#2D; // '-'
+        SlugLength := SlugLength + 1;
+        LastWasDash := TRUE;
+    END_IF
+END_FOR
+IF SlugLength > 0 AND_THEN Slug[SlugLength - 1] = 16#2D THEN
+    SlugLength := SlugLength - 1;
+END_IF
+Slug[SlugLength] := 0;
+IF SlugLength = 0 THEN
+    Slug := 'none';
+END_IF
+
+F_AlarmKey := CONCAT(CONCAT(CONCAT(CONCAT(Hex, '-'), UDINT_TO_STRING(Alarm.Entry.nEventId)), '-'), Slug);]]></ST>
+    </Implementation>
+  </POU>
+</TcPlcObject>

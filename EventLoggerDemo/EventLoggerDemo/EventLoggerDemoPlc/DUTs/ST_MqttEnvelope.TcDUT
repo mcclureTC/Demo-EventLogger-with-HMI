@@ -1,0 +1,16 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.12">
+  <DUT Name="ST_MqttEnvelope" Id="{de703a85-8e9f-4769-8213-ca2bf1fdc202}">
+    <Declaration><![CDATA[// Fields common to every message the PLC publishes.
+TYPE ST_MqttEnvelope :
+STRUCT
+    Thing     : STRING(63);   // AWS Thing Name = MQTT client ID
+    Session   : STRING(30);   // when the publisher started; a new value means sequences restarted
+    Sequence  : UDINT;        // rises with every message of this session
+    Timestamp : STRING(30);   // ISO 8601, UTC
+    Mode      : STRING(15);   // 'table' or 'per-alarm'
+    Reason    : STRING(15);   // 'startup', 'reconnect', 'change', 'text' or 'heartbeat'; empty to omit
+END_STRUCT
+END_TYPE]]></Declaration>
+  </DUT>
+</TcPlcObject>

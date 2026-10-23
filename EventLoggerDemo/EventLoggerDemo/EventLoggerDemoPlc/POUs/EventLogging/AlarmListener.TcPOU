@@ -45,6 +45,7 @@ END_VAR]]></Declaration>
     IF Row >= 0 THEN
         _TextRequests[Slot].GetString(sResult := _Table.Alarms[Row].Text, nResult := SIZEOF(_Table.Alarms[Row].Text));
         _Table.Alarms[Row].TextAvailable := TRUE;
+        _Table.TextCount := _Table.TextCount + 1;
     END_IF
 END_FOR]]></ST>
       </Implementation>
@@ -179,6 +180,7 @@ SourceName := SourceNameOf(fbEvent := fbEvent);
 Index := FindAlarm(Entry := Entry, SourceName := SourceName);
 IF Index >= 0 THEN
     _Table.Alarms[Index].IsConfirmed := TRUE;
+    _Table.ChangeCount := _Table.ChangeCount + 1;
 END_IF]]></ST>
       </Implementation>
     </Method>
@@ -230,6 +232,7 @@ Index := FindAlarm(Entry := Entry, SourceName := SourceName);
 IF Index < 0 THEN
     IF _Table.Count >= GVL_EventLogging.MaxPlcAlarms THEN
         _Table.Overflow := TRUE;
+        _Table.ChangeCount := _Table.ChangeCount + 1;
         RETURN;
     END_IF
     Index := UDINT_TO_DINT(_Table.Count);
@@ -242,7 +245,8 @@ _Table.Alarms[Index].TimeRaised  := fbEvent.nTimestamp;
 _Table.Alarms[Index].IsConfirmed := FALSE;
 _Table.Alarms[Index].TextAvailable := FALSE;
 _Table.Alarms[Index].Text := '';
-StartTextRequest(fbEvent := fbEvent, Entry := Entry, SourceName := SourceName);]]></ST>
+StartTextRequest(fbEvent := fbEvent, Entry := Entry, SourceName := SourceName);
+_Table.ChangeCount := _Table.ChangeCount + 1;]]></ST>
       </Implementation>
     </Method>
     <Method Name="RemoveAt" Id="{8091c888-78e3-4531-a107-eb88277e36b8}">
@@ -265,7 +269,8 @@ FOR Row := Index TO UDINT_TO_DINT(_Table.Count) - 2 DO
 END_FOR
 
 _Table.Count := _Table.Count - 1;
-_Table.Alarms[_Table.Count] := Empty;]]></ST>
+_Table.Alarms[_Table.Count] := Empty;
+_Table.ChangeCount := _Table.ChangeCount + 1;]]></ST>
       </Implementation>
     </Method>
     <Method Name="SourceNameOf" Id="{b82cdae5-8202-4af9-ab21-1652ce231fc7}">

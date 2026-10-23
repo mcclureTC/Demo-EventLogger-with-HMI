@@ -1,0 +1,28 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.12">
+  <POU Name="F_FileTimeToIso" Id="{a2b80811-9275-4559-8a6b-cbb3c5c37ecf}" SpecialFunc="None">
+    <Declaration><![CDATA[// FILETIME (100 ns since 1601-01-01 UTC) as ISO 8601 UTC, e.g. 2026-10-23T10:43:37.371Z.
+// Returns an empty string for 0.
+FUNCTION F_FileTimeToIso : STRING(30)
+VAR_INPUT
+    FileTime : ULINT;
+END_VAR
+VAR
+    Split : T_FILETIME;
+    Text  : STRING(24);
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[IF FileTime = 0 THEN
+    F_FileTimeToIso := '';
+    RETURN;
+END_IF
+
+Split.dwLowDateTime  := ULINT_TO_DWORD(FileTime AND ULINT#16#FFFFFFFF);
+Split.dwHighDateTime := ULINT_TO_DWORD(SHR(FileTime, 32));
+Text := SYSTEMTIME_TO_STRING(FILETIME_TO_SYSTEMTIME(Split));
+
+// 'YYYY-MM-DD-hh:mm:ss.xxx' becomes 'YYYY-MM-DDThh:mm:ss.xxxZ'
+F_FileTimeToIso := CONCAT(REPLACE(STR1 := Text, STR2 := 'T', L := 1, P := 11), 'Z');]]></ST>
+    </Implementation>
+  </POU>
+</TcPlcObject>

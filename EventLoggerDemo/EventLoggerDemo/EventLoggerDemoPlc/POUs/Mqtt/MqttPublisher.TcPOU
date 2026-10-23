@@ -1,0 +1,471 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4026.21">
+  <POU Name="MqttPublisher" Id="{12e639da-a7ea-4dea-8141-e4b84ea01cc7}" SpecialFunc="None">
+    <Declaration><![CDATA[// Publishes the PLC alarm table to an MQTT broker with TF6701, using only what AWS IoT Core
+// supports: MQTT 3.1.1, QoS 1, retained messages read by exact topic, topics within AWS limits.
+// Call CyclicLogic every cycle. Settings are read at PLC start from GVL_MqttSite and GVL_Mqtt.
+FUNCTION_BLOCK MqttPublisher
+VAR
+    _Client             : FB_IotMqttClient;
+    _Json               : AlarmJsonWriter;
+    _IsConfigured       : BOOL;
+    _Mode               : E_MqttPublishMode;
+    _ModeText           : STRING(15);
+    _Session            : STRING(30);
+    _Sequence           : UDINT;
+    _WillPayload        : STRING(255);
+    _Topic              : STRING(255);
+    _EmptyPayload       : BYTE;
+
+    _WasConnected       : BOOL;
+    _HasConnectedBefore : BOOL;
+    _OfflineSent        : BOOL;
+    _DisconnectDelay    : TON;
+    _HeartbeatTimer     : TON;
+    _TextWait           : TON;
+
+    _FullPublishPending : BOOL;
+    _PendingReason      : STRING(15);
+    _LastChangeCount    : UDINT;
+    _LastTextCount      : UDINT;
+
+    _Step               : E_MqttPublishStep;
+    _StepIndex          : UDINT;
+    _Reason             : STRING(15);
+    _Snapshot           : ST_PlcAlarmTable;
+    _SnapshotKeys       : ARRAY[0..GVL_EventLogging.MaxPlcAlarms - 1] OF STRING(127);
+    _PublishedKeys      : ARRAY[0..GVL_EventLogging.MaxPlcAlarms - 1] OF STRING(127);
+    _PublishedKeyCount  : UDINT;
+
+    _MessagesPublished  : UDINT;
+    _PublishFailures    : UDINT;
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[]]></ST>
+    </Implementation>
+    <Method Name="AllTextsAvailable" Id="{f49d5ab4-32ff-4c8f-a54d-2229650b1db1}">
+      <Declaration><![CDATA[METHOD PRIVATE AllTextsAvailable : BOOL
+VAR_IN_OUT CONSTANT
+    Table : ST_PlcAlarmTable;
+END_VAR
+VAR
+    Row : DINT;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[AllTextsAvailable := TRUE;
+FOR Row := 0 TO UDINT_TO_DINT(Table.Count) - 1 DO
+    IF NOT Table.Alarms[Row].TextAvailable THEN
+        AllTextsAvailable := FALSE;
+        RETURN;
+    END_IF
+END_FOR]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="Configure" Id="{f09f9e8d-c420-4fdd-91c4-60c623347d14}">
+      <Declaration><![CDATA[METHOD PRIVATE Configure
+// Reads the settings once, at PLC start.]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[_Mode := GVL_Mqtt.PublishMode;
+IF _Mode = E_MqttPublishMode.PerAlarm THEN
+    _ModeText := 'per-alarm';
+ELSE
+    _Mode := E_MqttPublishMode.Table;
+    _ModeText := 'table';
+END_IF
+_Session := F_FileTimeToIso(FileTime := F_GetSystemTime());
+
+_Client.sHostName    := GVL_MqttSite.BrokerHost;
+_Client.nHostPort    := GVL_MqttSite.BrokerPort;
+_Client.sClientId    := GVL_MqttSite.ThingName;
+_Client.sTopicPrefix := '';
+_Client.nKeepAlive   := GVL_Mqtt.KeepAliveSeconds;
+IF GVL_MqttSite.UseTls THEN
+    _Client.stTLS.sCA      := GVL_MqttSite.CaFile;
+    _Client.stTLS.sCert    := GVL_MqttSite.CertFile;
+    _Client.stTLS.sKeyFile := GVL_MqttSite.KeyFile;
+    _Client.stTLS.sVersion := 'tlsv1.2';
+END_IF
+
+// Last Will: retained 'offline' if the PLC drops off without saying so. QoS 1 must be set
+// explicitly: the library's default is QoS 2, which AWS IoT Core does not support.
+_WillPayload := CONCAT(CONCAT(CONCAT(CONCAT(CONCAT(CONCAT('{"thing":"', GVL_MqttSite.ThingName), '","session":"'), _Session), '","mode":"'), _ModeText), '","state":"offline"}');
+_Client.stWill.sTopic       := TopicFor(Suffix := 'status');
+_Client.stWill.pPayload     := ADR(_WillPayload);
+_Client.stWill.nPayloadSize := INT_TO_UDINT(LEN(_WillPayload));
+_Client.stWill.eQoS         := TcIotMqttQos.AtLeastOnceDelivery;
+_Client.stWill.bRetain      := TRUE;
+
+_IsConfigured := TRUE;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="CountResult" Id="{b736c9b0-532f-401e-b527-191ec7abaaac}">
+      <Declaration><![CDATA[METHOD PRIVATE CountResult
+VAR_INPUT
+    Sent : BOOL;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF Sent THEN
+    _MessagesPublished := _MessagesPublished + 1;
+ELSE
+    _PublishFailures := _PublishFailures + 1;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="CyclicLogic" Id="{526c9512-57ea-4466-ba4c-ae4f5c25c403}">
+      <Declaration><![CDATA[METHOD CyclicLogic
+VAR_IN_OUT CONSTANT
+    Table : ST_PlcAlarmTable;
+END_VAR
+VAR_IN_OUT
+    Status : ST_MqttStatus;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF NOT _IsConfigured THEN
+    Configure();
+END_IF
+
+UpdateConnection();
+
+IF _Client.bConnected AND NOT _WasConnected THEN
+    OnConnected();
+END_IF
+_WasConnected := _Client.bConnected;
+
+IF _Client.bConnected AND NOT _OfflineSent THEN
+    DetectChanges(Table := Table);
+    RunHeartbeat(Table := Table);
+    RunPublishStep();
+ELSE
+    // Nothing is published while disconnected; the full state follows the reconnect.
+    _Step := E_MqttPublishStep.Idle;
+END_IF
+
+Status.Connected         := _Client.bConnected;
+Status.ConnectionState   := _Client.eConnectionState;
+Status.HasError          := _Client.bError;
+Status.ErrorCode         := _Client.hrErrorCode;
+Status.Mode              := _Mode;
+Status.ModeChangePending := GVL_Mqtt.PublishMode <> _Mode;
+Status.Session           := _Session;
+Status.Sequence          := _Sequence;
+Status.MessagesPublished := _MessagesPublished;
+Status.PublishFailures   := _PublishFailures;
+Status.Busy              := _Step <> E_MqttPublishStep.Idle;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="DeleteAlarm" Id="{3d86ed19-36c4-443e-9616-8a2cae6aab7c}">
+      <Declaration><![CDATA[METHOD PRIVATE DeleteAlarm : BOOL
+// An empty retained message deletes the stored alarm on the broker (Mosquitto and AWS IoT Core).
+VAR_IN_OUT CONSTANT
+    Key : STRING(127);
+END_VAR
+VAR
+    Suffix : STRING(140);
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[Suffix := CONCAT('alarms/', Key);
+DeleteAlarm := SendEmpty(Suffix := Suffix);]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="DetectChanges" Id="{ee44da65-4180-45fd-bc99-abc7788e664a}">
+      <Declaration><![CDATA[METHOD PRIVATE DetectChanges
+// Starts a publication when the table changed. A change waits up to TextWaitTime for the texts
+// of new alarms; a text arriving later is published on its own with reason 'text'.
+VAR_IN_OUT CONSTANT
+    Table : ST_PlcAlarmTable;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF _Step <> E_MqttPublishStep.Idle THEN
+    RETURN; // the next publication includes whatever changed meanwhile
+END_IF
+
+IF _FullPublishPending THEN
+    _FullPublishPending := FALSE;
+    StartPublish(Table := Table, Reason := _PendingReason);
+ELSIF Table.ChangeCount <> _LastChangeCount THEN
+    _TextWait(IN := TRUE, PT := GVL_Mqtt.TextWaitTime);
+    IF AllTextsAvailable(Table := Table) OR _TextWait.Q THEN
+        StartPublish(Table := Table, Reason := 'change');
+    END_IF
+ELSIF Table.TextCount <> _LastTextCount THEN
+    StartPublish(Table := Table, Reason := 'text');
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="IsSnapshotKey" Id="{9091be3d-55d1-4e62-8d08-0e510f838965}">
+      <Declaration><![CDATA[METHOD PRIVATE IsSnapshotKey : BOOL
+VAR_IN_OUT CONSTANT
+    Key : STRING(127);
+END_VAR
+VAR
+    Row : DINT;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IsSnapshotKey := FALSE;
+FOR Row := 0 TO UDINT_TO_DINT(_Snapshot.Count) - 1 DO
+    IF _SnapshotKeys[Row] = Key THEN
+        IsSnapshotKey := TRUE;
+        RETURN;
+    END_IF
+END_FOR]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="NextEnvelope" Id="{6a0c1bf1-c33b-4e21-9947-3ad37dbe1fef}">
+      <Declaration><![CDATA[METHOD PRIVATE NextEnvelope : ST_MqttEnvelope
+VAR_INPUT
+    Reason : STRING(15);
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[_Sequence := _Sequence + 1;
+NextEnvelope.Thing     := GVL_MqttSite.ThingName;
+NextEnvelope.Session   := _Session;
+NextEnvelope.Sequence  := _Sequence;
+NextEnvelope.Timestamp := F_FileTimeToIso(FileTime := F_GetSystemTime());
+NextEnvelope.Mode      := _ModeText;
+NextEnvelope.Reason    := Reason;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="OnConnected" Id="{2f6b62ce-1eff-4671-bca3-a798f1a8b9dc}">
+      <Declaration><![CDATA[METHOD PRIVATE OnConnected
+// Every (re)connect: announce online, clear the other mode's retained topic, publish everything.]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[PublishStatus(Online := TRUE);
+
+IF _Mode = E_MqttPublishMode.PerAlarm THEN
+    SendEmpty(Suffix := 'alarms');
+ELSE
+    SendEmpty(Suffix := 'alarms/index');
+END_IF
+
+_FullPublishPending := TRUE;
+IF _HasConnectedBefore THEN
+    _PendingReason := 'reconnect';
+ELSE
+    _PendingReason := 'startup';
+END_IF
+_HasConnectedBefore := TRUE;
+_HeartbeatTimer(IN := FALSE);]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="PublishAlarm" Id="{af058b9e-6cb6-4578-ba36-d2f9f8a3403f}">
+      <Declaration><![CDATA[METHOD PRIVATE PublishAlarm : BOOL
+// Returns TRUE when the step is finished: sent, or impossible (document too large).
+VAR_INPUT
+    Row : UDINT;
+END_VAR
+VAR
+    Envelope : ST_MqttEnvelope;
+    Suffix   : STRING(140);
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[Envelope := NextEnvelope(Reason := _Reason);
+IF NOT _Json.WriteAlarm(Envelope := Envelope, Alarm := _Snapshot.Alarms[Row]) THEN
+    _PublishFailures := _PublishFailures + 1;
+    PublishAlarm := TRUE;
+    RETURN;
+END_IF
+Suffix := CONCAT('alarms/', _SnapshotKeys[Row]);
+PublishAlarm := Send(Suffix := Suffix, IsRetained := TRUE);]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="PublishIndex" Id="{f1ec1a90-c1f9-49b6-bc8b-4c0352194893}">
+      <Declaration><![CDATA[METHOD PRIVATE PublishIndex : BOOL
+// Consumers subscribe to each listed alarm by exact topic: AWS IoT Core does not deliver retained
+// messages to wildcard subscriptions. Only alarms listed here are current.
+VAR
+    Envelope : ST_MqttEnvelope;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[Envelope := NextEnvelope(Reason := _Reason);
+IF NOT _Json.WriteIndex(Envelope := Envelope, Keys := _SnapshotKeys, Count := _Snapshot.Count) THEN
+    _PublishFailures := _PublishFailures + 1;
+    PublishIndex := TRUE;
+    RETURN;
+END_IF
+PublishIndex := Send(Suffix := 'alarms/index', IsRetained := TRUE);]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="PublishStatus" Id="{88828152-972a-4188-af67-ee25fa37026a}">
+      <Declaration><![CDATA[METHOD PRIVATE PublishStatus
+VAR_INPUT
+    Online : BOOL;
+END_VAR
+VAR
+    Envelope : ST_MqttEnvelope;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[Envelope := NextEnvelope(Reason := '');
+IF _Json.WriteStatus(Envelope := Envelope, Online := Online) THEN
+    Send(Suffix := 'status', IsRetained := TRUE);
+ELSE
+    _PublishFailures := _PublishFailures + 1;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="PublishTable" Id="{5beabac7-54d1-4832-a970-f54dd4e63e47}">
+      <Declaration><![CDATA[METHOD PRIVATE PublishTable : BOOL
+// Returns TRUE when the step is finished: sent, or impossible (document too large).
+VAR
+    Envelope : ST_MqttEnvelope;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[Envelope := NextEnvelope(Reason := _Reason);
+IF NOT _Json.WriteTable(Envelope := Envelope, Table := _Snapshot) THEN
+    _PublishFailures := _PublishFailures + 1;
+    PublishTable := TRUE;
+    RETURN;
+END_IF
+PublishTable := Send(Suffix := 'alarms', IsRetained := TRUE);]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="RunHeartbeat" Id="{8bd3e12e-3601-4fdb-8061-6303240b2805}">
+      <Declaration><![CDATA[METHOD PRIVATE RunHeartbeat
+VAR_IN_OUT CONSTANT
+    Table : ST_PlcAlarmTable;
+END_VAR
+VAR
+    Envelope : ST_MqttEnvelope;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[_HeartbeatTimer(IN := TRUE, PT := GVL_Mqtt.HeartbeatInterval);
+IF NOT _HeartbeatTimer.Q THEN
+    RETURN;
+END_IF
+_HeartbeatTimer(IN := FALSE);
+
+Envelope := NextEnvelope(Reason := 'heartbeat');
+IF _Json.WriteHeartbeat(Envelope := Envelope, Count := Table.Count, Overflow := Table.Overflow) THEN
+    Send(Suffix := 'heartbeat', IsRetained := FALSE);
+ELSE
+    _PublishFailures := _PublishFailures + 1;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="RunPublishStep" Id="{c8ec540b-9cb9-49d1-954a-17a448173081}">
+      <Declaration><![CDATA[METHOD PRIVATE RunPublishStep
+// One message per cycle. A refused publish is retried in the next cycle.]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[CASE _Step OF
+    E_MqttPublishStep.Table:
+        IF PublishTable() THEN
+            _Step := E_MqttPublishStep.Idle;
+        END_IF
+
+    E_MqttPublishStep.Alarms:
+        IF _StepIndex >= _Snapshot.Count THEN
+            _Step := E_MqttPublishStep.DeleteStale;
+            _StepIndex := 0;
+        ELSIF PublishAlarm(Row := _StepIndex) THEN
+            _StepIndex := _StepIndex + 1;
+        END_IF
+
+    E_MqttPublishStep.DeleteStale:
+        WHILE _StepIndex < _PublishedKeyCount AND_THEN IsSnapshotKey(Key := _PublishedKeys[_StepIndex]) DO
+            _StepIndex := _StepIndex + 1;
+        END_WHILE
+        IF _StepIndex >= _PublishedKeyCount THEN
+            _Step := E_MqttPublishStep.Index;
+        ELSIF DeleteAlarm(Key := _PublishedKeys[_StepIndex]) THEN
+            _StepIndex := _StepIndex + 1;
+        END_IF
+
+    E_MqttPublishStep.Index:
+        IF PublishIndex() THEN
+            _PublishedKeys := _SnapshotKeys;
+            _PublishedKeyCount := _Snapshot.Count;
+            _Step := E_MqttPublishStep.Idle;
+        END_IF
+END_CASE]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="Send" Id="{02fabcc4-2a12-4915-918a-52afb24ed328}">
+      <Declaration><![CDATA[METHOD PRIVATE Send : BOOL
+// Publishes the JSON writer's current payload, QoS 1.
+VAR_INPUT
+    Suffix : STRING(140);
+    IsRetained : BOOL;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[_Topic := TopicFor(Suffix := Suffix);
+Send := _Client.Publish(sTopic := _Topic, pPayload := _Json.PayloadAddress, nPayloadSize := _Json.PayloadLength, eQoS := TcIotMqttQos.AtLeastOnceDelivery, bRetain := IsRetained, bQueue := FALSE);
+CountResult(Sent := Send);]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="SendEmpty" Id="{2dad59d5-b70b-4a6f-9569-d5ee2d3cf6f3}">
+      <Declaration><![CDATA[METHOD PRIVATE SendEmpty : BOOL
+// Publishes an empty retained message, which deletes the retained message on that topic.
+VAR_INPUT
+    Suffix : STRING(140);
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[_Topic := TopicFor(Suffix := Suffix);
+SendEmpty := _Client.Publish(sTopic := _Topic, pPayload := ADR(_EmptyPayload), nPayloadSize := 0, eQoS := TcIotMqttQos.AtLeastOnceDelivery, bRetain := TRUE, bQueue := FALSE);
+CountResult(Sent := SendEmpty);]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="StartPublish" Id="{646b7eeb-bcb7-4f2b-8a36-d182b07388ef}">
+      <Declaration><![CDATA[METHOD PRIVATE StartPublish
+// Takes a consistent copy of the table, then publishes it over the next cycles.
+VAR_IN_OUT CONSTANT
+    Table : ST_PlcAlarmTable;
+END_VAR
+VAR_INPUT
+    Reason : STRING(15);
+END_VAR
+VAR
+    Row : DINT;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[_Snapshot := Table;
+FOR Row := 0 TO UDINT_TO_DINT(_Snapshot.Count) - 1 DO
+    _SnapshotKeys[Row] := F_AlarmKey(Alarm := _Snapshot.Alarms[Row]);
+END_FOR
+
+_LastChangeCount := Table.ChangeCount;
+_LastTextCount   := Table.TextCount;
+_Reason := Reason;
+_TextWait(IN := FALSE);
+_StepIndex := 0;
+
+IF _Mode = E_MqttPublishMode.PerAlarm THEN
+    _Step := E_MqttPublishStep.Alarms;
+ELSE
+    _Step := E_MqttPublishStep.Table;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="TopicFor" Id="{5245871c-c460-44bb-8e88-502c19092e18}">
+      <Declaration><![CDATA[METHOD PRIVATE TopicFor : STRING(255)
+// dt/eventloggerdemo/<thing>/<suffix>: at most 6 slashes and 256 bytes, as AWS IoT Core requires.
+VAR_INPUT
+    Suffix : STRING(140);
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TopicFor := CONCAT(CONCAT(CONCAT(CONCAT(GVL_Mqtt.TopicRoot, '/'), GVL_MqttSite.ThingName), '/'), Suffix);]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="UpdateConnection" Id="{ecb7ca39-bd6d-4559-aff8-7be929fa4841}">
+      <Declaration><![CDATA[METHOD PRIVATE UpdateConnection
+// Keeps the connection while GVL_Mqtt.Enable is TRUE. When it goes FALSE, publishes 'offline'
+// and disconnects half a second later, so the message leaves first. (AWS IoT Core sends no
+// Last Will on an orderly disconnect, so 'offline' must be published explicitly.)
+VAR
+    StayConnected : BOOL;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF GVL_Mqtt.Enable THEN
+    _OfflineSent := FALSE;
+ELSIF NOT _OfflineSent THEN
+    IF _Client.bConnected THEN
+        PublishStatus(Online := FALSE);
+    END_IF
+    _OfflineSent := TRUE;
+END_IF
+
+_DisconnectDelay(IN := _OfflineSent, PT := T#500MS);
+StayConnected := _OfflineSent AND _Client.bConnected AND NOT _DisconnectDelay.Q;
+_Client.Execute(bConnect := GVL_Mqtt.Enable OR StayConnected);]]></ST>
+      </Implementation>
+    </Method>
+  </POU>
+</TcPlcObject>

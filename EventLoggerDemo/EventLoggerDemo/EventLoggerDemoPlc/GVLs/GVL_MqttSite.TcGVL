@@ -1,0 +1,21 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.12">
+  <GVL Name="GVL_MqttSite" Id="{0e5656bc-8767-4331-b833-c2bc166c05c9}">
+    <Declaration><![CDATA[// The broker connection of the PC the PLC runs on. Edit by hand; read at PLC start only.
+// Default: everything on one PC, with the certificates CertTool wrote to the repository's Broker\certs.
+// If the repository is somewhere else, change the three paths.
+// PLC on a separate target: copy ca.crt, eventloggerdemo-01.crt and eventloggerdemo-01.key to the target,
+// point the paths there, and set BrokerHost to the broker PC's name or IPv4 address (see MQTT.md).
+// AWS IoT Core: BrokerHost = the account's ATS endpoint, and the three files AWS issues.
+{attribute 'qualified_only'}
+VAR_GLOBAL
+    BrokerHost : STRING(255) := '127.0.0.1';         // separate target: the broker PC's name or IPv4 address
+    BrokerPort : UINT := 8883;
+    UseTls     : BOOL := TRUE;                       // FALSE only with the broker's diagnostic listener on 1883
+    ThingName  : STRING(63) := 'eventloggerdemo-01'; // MQTT client ID; must equal the certificate's CN
+    CaFile     : STRING(255) := 'C:\repo\Demo-EventLogger-with-HMI\Broker\certs\ca.crt';
+    CertFile   : STRING(255) := 'C:\repo\Demo-EventLogger-with-HMI\Broker\certs\eventloggerdemo-01.crt';
+    KeyFile    : STRING(255) := 'C:\repo\Demo-EventLogger-with-HMI\Broker\certs\eventloggerdemo-01.key';
+END_VAR]]></Declaration>
+  </GVL>
+</TcPlcObject>
